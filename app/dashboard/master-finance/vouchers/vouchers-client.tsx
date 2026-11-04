@@ -1,8 +1,9 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { createVoucher, getVouchers, cancelVoucher } from "@/app/actions/master-finance"
-import { PenLine, Plus, Trash2, Check, X, AlertCircle, ChevronDown, ChevronRight } from "lucide-react"
+import Link from "next/link"
+import { createVoucher, getVouchers, cancelVoucher, getHospitalBankAccounts } from "@/app/actions/master-finance"
+import { PenLine, Plus, Trash2, Check, X, AlertCircle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface AccountGroup {
@@ -63,6 +64,7 @@ export function VouchersClient({
   bankAccounts: BankAccount[]
 }) {
   const router = useRouter()
+  const [currentAccounts, setCurrentAccounts] = useState<BankAccount[]>(bankAccounts)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [vouchers, setVouchers] = useState<VoucherRow[]>([])
@@ -78,6 +80,21 @@ export function VouchersClient({
   ])
   const [error, setError] = useState("")
 
+  useEffect(() => {
+    setCurrentAccounts(bankAccounts)
+  }, [bankAccounts])
+
+  const refreshAccounts = async () => {
+    try {
+      const res = await getHospitalBankAccounts()
+      if (res.success && res.data) {
+        setCurrentAccounts(JSON.parse(JSON.stringify(res.data)))
+      }
+    } catch (e) {
+      console.error("[ERROR] refreshAccounts:", e)
+    }
+  }
+
   async function fetchVouchers() {
     try {
       const result = await getVouchers({ limit: 20 })
@@ -88,7 +105,10 @@ export function VouchersClient({
     }
   }
 
-  useEffect(() => { fetchVouchers() }, [])
+  useEffect(() => {
+    fetchVouchers()
+    refreshAccounts()
+  }, [])
 
   function addEntry() {
     setEntries([...entries, { accountGroupCode: "", debitAmount: 0, creditAmount: 0 }])
@@ -121,7 +141,7 @@ export function VouchersClient({
     const map = new Map<string, { account: BankAccount; debits: number; credits: number; net: number }>()
     for (const e of entries) {
       if (!e.financialAccountId) continue
-      const acc = bankAccounts.find((a) => a.id === e.financialAccountId)
+      const acc = currentAccounts.find((a) => a.id === e.financialAccountId)
       if (!acc) continue
       const current = map.get(acc.id) || { account: acc, debits: 0, credits: 0, net: 0 }
       current.debits += Number(e.debitAmount) || 0
@@ -130,7 +150,7 @@ export function VouchersClient({
       map.set(acc.id, current)
     }
     return Array.from(map.values())
-  }, [entries, bankAccounts])
+  }, [entries, currentAccounts])
 
   const hasSelfCancellingAccount = accountImpacts.some(
     (ai) => ai.debits > 0 && ai.credits > 0 && Math.abs(ai.net) < 0.01
@@ -197,7 +217,11 @@ export function VouchersClient({
           <p className="text-sm text-slate-500 mt-1">Create manual journal entries (JV, Receipt, Payment, Contra)</p>
         </div>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            const next = !showForm
+            setShowForm(next)
+            if (next) refreshAccounts()
+          }}
           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -244,7 +268,19 @@ export function VouchersClient({
                 <tr className="bg-slate-50 text-xs text-slate-500 border-b border-slate-200">
                   <th className="text-left p-3 font-medium w-10">#</th>
                   <th className="text-left p-3 font-medium">Ledger Account</th>
-                  <th className="text-left p-3 font-medium">Bank / Cash Account</th>
+                  <th className="text-left p-3 font-medium">
+                    <div className="flex items-center justify-between">
+                      <span>Bank / Cash Account</span>
+                      <Link
+                        href="/dashboard/master-finance/cash-bank/accounts"
+                        target="_blank"
+                        className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-normal inline-flex items-center gap-0.5"
+                        title="Open Accounts Manager in new tab to create accounts"
+                      >
+                        + New Account
+                      </Link>
+                    </div>
+                  </th>
                   <th className="text-right p-3 font-medium w-36">Debit (₹)</th>
                   <th className="text-right p-3 font-medium w-36">Credit (₹)</th>
                   <th className="text-center p-3 font-medium w-12"></th>
@@ -290,7 +326,7 @@ export function VouchersClient({
                         className="w-full border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                       >
                         <option value="">— None (Non-Cash / Bank) —</option>
-                        {bankAccounts.map((account) => (
+                        {currentAccounts.map((account) => (
                           <option key={account.id} value={account.id}>
                             [{account.type}] {account.name}{account.bankName ? ` (${account.bankName})` : ""} — ₹{account.currentBalance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </option>

@@ -311,17 +311,18 @@ export async function createAccount(data: {
   ifscCode?: string
   description?: string
   openingBalance?: number
-}): Promise<{ success: boolean; message: string }> {
-  const authResult = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT"])
+  scope?: string
+}): Promise<{ success: boolean; message: string; account?: any }> {
+  const authResult = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT", "ADMIN"])
   if (!authResult.ok) return { success: false, message: authResult.error }
 
   try {
     if (!data.name?.trim()) return { success: false, message: "Account name is required" }
     if (!data.type) return { success: false, message: "Account type is required" }
 
-    const balance = data.openingBalance || 0
+    const balance = Number(data.openingBalance) || 0
 
-    await prisma.financialAccount.create({
+    const newAccount = await prisma.financialAccount.create({
       data: {
         name: data.name.trim(),
         type: data.type,
@@ -331,15 +332,20 @@ export async function createAccount(data: {
         description: data.description?.trim() || null,
         openingBalance: balance,
         currentBalance: balance,
+        scope: data.scope || "HOSPITAL",
+        isActive: true,
       },
     })
 
     revalidatePath("/dashboard/master-finance/cash-bank/accounts")
     revalidatePath("/dashboard/master-finance/cash-bank/bank-book")
     revalidatePath("/dashboard/master-finance/cash-bank/cash-book")
+    revalidatePath("/dashboard/master-finance/vouchers")
+    revalidatePath("/dashboard/master-finance/cash-bank/petty-cash")
     revalidatePath("/dashboard/master-finance/settings/opening-balances")
     revalidatePath("/dashboard/master-finance/statements/balance-sheet")
     revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/master-finance/vouchers")
     revalidatePath("/dashboard/master-finance")
     revalidatePath("/dashboard/finance")
     revalidatePath("/dashboard/finance/accounts")
@@ -348,10 +354,10 @@ export async function createAccount(data: {
       userId: authResult.session.userId,
       action: "CREATE",
       module: "FinancialAccount",
-      changes: { name: data.name, type: data.type },
+      changes: { id: newAccount.id, name: data.name, type: data.type, openingBalance: balance },
     })
 
-    return { success: true, message: `Account "${data.name}" created` }
+    return { success: true, message: `Account "${data.name}" created successfully`, account: newAccount }
   } catch (error) {
     console.error("[ERROR] createAccount:", error)
     return actionError(getErrorMessage(error))
@@ -366,6 +372,7 @@ export async function updateAccount(
   id: string,
   data: {
     name?: string
+    type?: string
     accountNumber?: string
     bankName?: string
     ifscCode?: string
@@ -373,7 +380,7 @@ export async function updateAccount(
     openingBalance?: number
   }
 ): Promise<{ success: boolean; message: string }> {
-  const authResult = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT"])
+  const authResult = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT", "ADMIN"])
   if (!authResult.ok) return { success: false, message: authResult.error }
 
   try {
@@ -381,12 +388,13 @@ export async function updateAccount(
     if (!account) return { success: false, message: "Hospital account not found" }
 
     await prisma.$transaction(async (tx) => {
-      const openingBalance = data.openingBalance ?? account.openingBalance
+      const openingBalance = data.openingBalance !== undefined ? Number(data.openingBalance) : account.openingBalance
       const openingDelta = openingBalance - account.openingBalance
       await tx.financialAccount.update({
         where: { id },
         data: {
           ...(data.name !== undefined && { name: data.name.trim() }),
+          ...(data.type !== undefined && { type: data.type }),
           ...(data.accountNumber !== undefined && { accountNumber: data.accountNumber.trim() || null }),
           ...(data.bankName !== undefined && { bankName: data.bankName.trim() || null }),
           ...(data.ifscCode !== undefined && { ifscCode: data.ifscCode.trim() || null }),
@@ -400,9 +408,12 @@ export async function updateAccount(
     revalidatePath("/dashboard/master-finance/cash-bank/accounts")
     revalidatePath("/dashboard/master-finance/cash-bank/bank-book")
     revalidatePath("/dashboard/master-finance/cash-bank/cash-book")
+    revalidatePath("/dashboard/master-finance/vouchers")
+    revalidatePath("/dashboard/master-finance/cash-bank/petty-cash")
     revalidatePath("/dashboard/master-finance/settings/opening-balances")
     revalidatePath("/dashboard/master-finance/statements/balance-sheet")
     revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/master-finance/vouchers")
     revalidatePath("/dashboard/master-finance")
     revalidatePath("/dashboard/finance")
     revalidatePath("/dashboard/finance/accounts")
@@ -414,7 +425,7 @@ export async function updateAccount(
       changes: { id, ...data },
     })
 
-    return { success: true, message: "Account updated" }
+    return { success: true, message: "Account updated successfully" }
   } catch (error) {
     console.error("[ERROR] updateAccount:", error)
     return actionError(getErrorMessage(error))
@@ -428,7 +439,7 @@ export async function updateAccount(
 export async function deactivateAccount(
   id: string
 ): Promise<{ success: boolean; message: string }> {
-  const authResult = await requireAuthSafe(["SUPER_ADMIN"])
+  const authResult = await requireAuthSafe(["SUPER_ADMIN", "ADMIN"])
   if (!authResult.ok) return { success: false, message: authResult.error }
 
   try {
@@ -438,7 +449,7 @@ export async function deactivateAccount(
     if (Math.abs(account.currentBalance) > 0.01) {
       return {
         success: false,
-        message: `Cannot deactivate — balance is ₹${account.currentBalance.toLocaleString("en-IN")}. Transfer funds first.`,
+        message: `Cannot deactivate — balance is ₹${account.currentBalance.toLocaleString("en-IN")}. Transfer or settle remaining funds first.`,
       }
     }
 
@@ -450,9 +461,12 @@ export async function deactivateAccount(
     revalidatePath("/dashboard/master-finance/cash-bank/accounts")
     revalidatePath("/dashboard/master-finance/cash-bank/bank-book")
     revalidatePath("/dashboard/master-finance/cash-bank/cash-book")
+    revalidatePath("/dashboard/master-finance/vouchers")
+    revalidatePath("/dashboard/master-finance/cash-bank/petty-cash")
     revalidatePath("/dashboard/master-finance/settings/opening-balances")
     revalidatePath("/dashboard/master-finance/statements/balance-sheet")
     revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/master-finance/vouchers")
     revalidatePath("/dashboard/master-finance")
     revalidatePath("/dashboard/finance")
     revalidatePath("/dashboard/finance/accounts")
@@ -464,7 +478,7 @@ export async function deactivateAccount(
       changes: { id, name: account.name },
     })
 
-    return { success: true, message: `"${account.name}" deactivated` }
+    return { success: true, message: `Account "${account.name}" deactivated successfully` }
   } catch (error) {
     console.error("[ERROR] deactivateAccount:", error)
     return actionError(getErrorMessage(error))
@@ -516,6 +530,7 @@ export async function consolidateHospitalAccounts(): Promise<{ success: boolean;
     revalidatePath("/dashboard/master-finance/cash-bank/accounts")
     revalidatePath("/dashboard/master-finance/cash-bank/bank-book")
     revalidatePath("/dashboard/master-finance/cash-bank/cash-book")
+    revalidatePath("/dashboard/master-finance/vouchers")
     writeAuditLog({ userId: authResult.session.userId, action: "UPDATE", module: "FinancialAccount", changes: { operation: "CONSOLIDATE_HOSPITAL_CASH_BANK" } })
     return { success: true, message: "Hospital bank and cash accounts consolidated successfully" }
   } catch (error) {
@@ -601,6 +616,7 @@ export async function transferBetweenAccounts(data: {
     revalidatePath("/dashboard/master-finance/cash-bank/accounts")
     revalidatePath("/dashboard/master-finance/cash-bank/bank-book")
     revalidatePath("/dashboard/master-finance/cash-bank/cash-book")
+    revalidatePath("/dashboard/master-finance/vouchers")
     revalidatePath("/dashboard/master-finance/settings/opening-balances")
     revalidatePath("/dashboard/master-finance/statements/balance-sheet")
     revalidatePath("/dashboard/master-finance/general-ledger")

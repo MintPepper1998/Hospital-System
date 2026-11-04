@@ -4255,6 +4255,7 @@ export async function addStockBatch(data: {
           medicine = await tx.medicine.create({
             data: {
               name: item.medicineName.trim(),
+              genericName: (item as any).genericName?.trim() || item.medicineName.trim(),
               type: "TABLET",
               hsnCode: item.hsnCode?.trim() || "3004",
               unitPrice: item.sellingPrice ? Number((item.sellingPrice / (item.packSize || 1)).toFixed(4)) : 0,

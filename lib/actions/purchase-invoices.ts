@@ -247,6 +247,7 @@ export async function updatePurchaseInvoiceFull(
             med = await tx.medicine.create({
               data: {
                 name: item.itemName.trim(),
+                genericName: item.itemName.trim(),
                 type: "TABLET",
                 hsnCode: item.hsnCode?.trim() || "3004",
                 unitPrice: item.sellPrice ? round4(item.sellPrice / (item.packSize || 1)) : 0,

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "aws-development": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "computedHash": "0c461fc8ba15c0aa6d049122529d25fc7456d46aa9f9e11c4025d630816b60ec"
+    },
+    "billing-automation": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "c0a8bc1d409a8f5617fa310303458e6d6fd98cd9e66c2972bb6407781a018835"
+    }
+  }
+}

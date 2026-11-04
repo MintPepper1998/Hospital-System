@@ -1,0 +1,88 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - nvm use 20
+        # Force devDependencies install — tailwindcss & @tailwindcss/postcss are devDeps needed at build time
+        - NODE_ENV=development npm ci
+        # Pipe Amplify Console env vars into .env for Prisma & Next.js
+        - echo "DATABASE_URL=$DATABASE_URL" >> .env
+        - echo "NEXTAUTH_URL=$NEXTAUTH_URL" >> .env
+        - echo "NEXTAUTH_SECRET=$NEXTAUTH_SECRET" >> .env
+        - echo "AUTH_SECRET=$AUTH_SECRET" >> .env
+        - echo "AUTH_TRUST_HOST=$AUTH_TRUST_HOST" >> .env
+        - echo "S3_REGION=$S3_REGION" >> .env
+        - echo "S3_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID" >> .env
+        - echo "S3_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY" >> .env
+        - echo "S3_BUCKET_NAME=$S3_BUCKET_NAME" >> .env
+        - echo "HOSPITAL_SNS_REGION=$HOSPITAL_SNS_REGION" >> .env
+        - echo "HOSPITAL_SNS_ACCESS_KEY_ID=$HOSPITAL_SNS_ACCESS_KEY_ID" >> .env
+        - echo "HOSPITAL_SNS_SECRET_ACCESS_KEY=$HOSPITAL_SNS_SECRET_ACCESS_KEY" >> .env
+        - echo "WHATSAPP_ENABLED=$WHATSAPP_ENABLED" >> .env
+        - echo "META_WA_ACCESS_TOKEN=$META_WA_ACCESS_TOKEN" >> .env
+        - echo "META_WA_PHONE_NUMBER_ID=$META_WA_PHONE_NUMBER_ID" >> .env
+        - echo "WHATSAPP_WEBHOOK_VERIFY_TOKEN=$WHATSAPP_WEBHOOK_VERIFY_TOKEN" >> .env
+    build:
+      commands:
+        - export NODE_ENV=production
+        - export NODE_OPTIONS="--max-old-space-size=4096"
+        - export NEXT_TELEMETRY_DISABLED=1
+        - export NEXT_DISABLE_ESLINT=1
+        - npx prisma generate
+        - npm run build
+    postBuild:
+      commands:
+        # ── Aggressive size reduction to stay under Amplify's 220MB limit ──
+        #
+        # ROOT CAUSE: Amplify uploads everything under baseDirectory (.next).
+        # Next.js standalone already contains its own .next/server copy, so
+        # the top-level .next/server and .next/build are DUPLICATES that
+        # nearly double the artifact size via hard-link expansion in the ZIP.
+        #
+        # Step 1: Remove non-essential top-level directories
+        # NOTE: Do NOT delete .next/server — Amplify SSR requires it!
+        - rm -rf .next/build
+        - rm -rf .next/cache
+        - rm -rf .next/types .next/trace-build .next/dev .next/diagnostics
+        # Step 2: Remove source maps (not needed at runtime)
+        - find .next -name "*.map" -type f -delete || true
+        # Step 3: Remove platform-specific binaries from ROOT node_modules (Amplify traces root node_modules)
+        - find node_modules/.prisma/client -name "*windows*" -type f -delete || true
+        - find node_modules/.prisma/client -name "*darwin*" -type f -delete || true
+        - find node_modules/.prisma/client -name "*debian*" -type f -delete || true
+        - find node_modules/.prisma/client -name "*rhel-openssl-1.0.x*" -type f -delete || true
+        - rm -rf node_modules/@prisma/engines
+        # Step 4: Remove Prisma engines from standalone (just in case)
+        - find .next/standalone -name "*windows*" -type f -delete || true
+        - find .next/standalone -name "*darwin*" -type f -delete || true
+        - find .next/standalone -name "*debian*" -type f -delete || true
+        - find .next/standalone -name "*rhel-openssl-1.0.x*" -type f -delete || true
+        - rm -rf .next/standalone/node_modules/@prisma/engines
+        # Step 5: Remove Prisma WASM engines (only needed for Edge runtime, we use Node)
+        - find node_modules/.prisma/client -name "*.wasm" -type f -delete || true
+        - find .next/standalone -name "*.wasm" -type f -delete || true
+        - find .next/standalone -name "*.wasm-base64*" -type f -delete || true
+        # Step 6: Remove non-runtime files from standalone node_modules
+        - find .next/standalone/node_modules -name "*.d.ts" -type f -delete || true
+        - find .next/standalone/node_modules -name "*.md" -type f -delete || true
+        - find .next/standalone/node_modules -name "LICENSE*" -type f -delete || true
+        - find .next/standalone/node_modules -name "README*" -type f -delete || true
+        # Step 7: Delete duplicate .next output inside standalone (Amplify uses top-level .next/server)
+        - rm -rf .next/standalone/.next
+        - rm -f .next/standalone/server.js
+        # Step 8: Print final size for debugging
+        - echo "=== Final artifact size breakdown ==="
+        - du -sh .next || true
+        - du -sh .next/standalone .next/static 2>/dev/null || true
+        - du -sh .next/standalone/node_modules 2>/dev/null || true
+        - echo "=== File count ==="
+        - find .next -type f | wc -l || true
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+      - .next/cache/**/*

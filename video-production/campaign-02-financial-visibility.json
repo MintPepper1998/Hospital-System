@@ -1,0 +1,55 @@
+{
+  "output": "output/02-financial-visibility-portrait.mp4",
+  "scenes": [
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\05-demo-billing-visibilit.mp4",
+      "start": 2,
+      "duration": 7,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "FINANCE \u2022 LEDGERS \u2022 CONTROL",
+      "title": "Total financial transparency.",
+      "body": "Track hospital and pharmacy operations with the clarity your finance team expects."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\04-demo-pharmacy-workflow.mp4",
+      "start": 15,
+      "duration": 6,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "PHARMACY FINANCE",
+      "title": "Separate financial ledgers for pharmacy and hospital.",
+      "body": "Need a dedicated financial view for pharmacy? Done. Your departments can work with the structure you choose."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\05-demo-billing-visibilit.mp4",
+      "start": 34,
+      "duration": 6,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "CASH \u2022 COLLECTIONS \u2022 LEDGER",
+      "title": "Designed to stop daily cash leakage.",
+      "body": "Bring collections and ledger visibility together so every rupee has a clearer place in the workflow."
+    },
+    {
+      "source": null,
+      "start": 0,
+      "duration": 5,
+      "eyebrow": "HOSPITAL MANAGER",
+      "title": "Book your private demonstration.",
+      "body": "Custom hospital software. Founding Partner pricing available now."
+    }
+  ]
+}

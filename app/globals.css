@@ -1,0 +1,710 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+:root {
+  --radius: 0.75rem;
+  /* Figma: Cool slate background instead of pure white */
+  --background: #F1F5F9;
+  --foreground: #1E293B;
+  /* Cards: Pure white on slate BG for contrast */
+  --card: #FFFFFF;
+  --card-foreground: #1E293B;
+  --popover: #FFFFFF;
+  --popover-foreground: #1E293B;
+  /* Primary: Deep Royal Blue from Figma sidebar */
+  --primary: #004AAD;
+  --primary-foreground: #FFFFFF;
+  /* Secondary: Light blue-gray */
+  --secondary: #E2E8F0;
+  --secondary-foreground: #1E293B;
+  /* Muted: Subtle cool gray */
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  /* Accent: Teal-green from Figma CTA buttons */
+  --accent: #F0FDF9;
+  --accent-foreground: #00B69B;
+  /* Destructive: Red from Figma */
+  --destructive: #EF4444;
+  /* Borders: Cool gray */
+  --border: #E2E8F0;
+  --input: #E2E8F0;
+  --ring: #004AAD;
+  /* Chart colors — modern palette */
+  --chart-1: #004AAD;
+  --chart-2: #00B69B;
+  --chart-3: #F97316;
+  --chart-4: #8B5CF6;
+  --chart-5: #EC4899;
+  /* Sidebar: Deep Blue from Figma */
+  --sidebar: #004AAD;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #FFFFFF;
+  --sidebar-primary-foreground: #004AAD;
+  --sidebar-accent: rgba(255, 255, 255, 0.15);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: rgba(255, 255, 255, 0.3);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Print Styles for Invoices/Receipts */
+@media print {
+  /* ── Hide ALL dashboard chrome when printing ── */
+  /* Sidebar (both desktop and mobile) */
+  aside,
+  nav,
+  header,
+  [data-sidebar],
+  .sidebar,
+  .print\:hidden {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Dashboard layout: Remove sidebar margin offset */
+  .xl\:ml-64 {
+    margin-left: 0 !important;
+  }
+
+  /* Hide toasts, floating buttons, dialog overlays */
+  [data-sonner-toaster],
+  [data-radix-dialog-overlay] {
+    display: none !important;
+  }
+
+  /* Optimize for print */
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  /* Make content take full width */
+  main,
+  .main-content,
+  body > div {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Remove shadows and unnecessary borders */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Ensure proper page breaks */
+  .print\:page-break-before {
+    page-break-before: always;
+  }
+
+  .print\:page-break-after {
+    page-break-after: always;
+  }
+
+  /* Optimize table printing */
+  table {
+    page-break-inside: avoid;
+    width: 100%;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Default page setup — components override via CSS named pages (e.g. @page medicine-a5) */
+  @page {
+    margin: 10mm;
+    size: auto;
+  }
+
+  /* Preserve colors for badges and highlights */
+  .print\:text-black {
+    color: black !important;
+  }
+
+  .print\:bg-white {
+    background-color: white !important;
+  }
+
+  /* Badge colors - preserved for clarity */
+  .print\:bg-blue-100 {
+    background-color: #dbeafe !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print\:bg-purple-100 {
+    background-color: #f3e8ff !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print\:bg-green-100 {
+    background-color: #dcfce7 !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print\:bg-orange-100 {
+    background-color: #ffedd5 !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print\:bg-green-600 {
+    background-color: #16a34a !important;
+    color: white !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print\:bg-orange-500 {
+    background-color: #f97316 !important;
+    color: white !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print\:text-green-700 {
+    color: #15803d !important;
+  }
+
+  .print\:text-orange-700 {
+    color: #c2410c !important;
+  }
+
+  /* Ensure proper spacing */
+  .print\:mt-8 {
+    margin-top: 2rem !important;
+  }
+
+  .print\:mt-16 {
+    margin-top: 4rem !important;
+  }
+
+  /* Hide dark mode styles in print */
+  .dark {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Ensure invoice container is properly sized */
+  .space-y-6 {
+    margin: 0 auto !important;
+    max-width: 100% !important;
+  }
+
+  /* Border preservation for invoice */
+  .print\:border-black {
+    border-color: black !important;
+  }
+
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+
+  /* Font size adjustments for print */
+  .print\:text-sm {
+    font-size: 0.875rem !important;
+  }
+
+  /* Ensure backgrounds print */
+  [class*="bg-"],
+  [class*="border-"] {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  /* OPD Card specific styles */
+  .opd-card {
+    width: 148mm !important;
+    min-height: 210mm !important;
+    margin: 0 auto !important;
+    page-break-after: always;
+  }
+
+  /* Prescription Pad styles (A4) */
+  .prescription-pad {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 auto !important;
+    background: white !important;
+  }
+
+  /* A4 page setup for prescriptions — overridden by named @page rules in each component */
+
+  /* Ensure proper spacing in print */
+  .opd-card *,
+  .prescription-pad * {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  /* Prevent page breaks in critical sections */
+  .prescription-pad .header-section,
+  .prescription-pad .patient-info-strip,
+  .prescription-pad .main-content {
+    page-break-inside: avoid !important;
+  }
+
+  /* Ensure single page for prescription */
+  .prescription-pad {
+    max-height: 297mm !important;
+    overflow: hidden !important;
+  }
+}
+
+/* Rx symbol styling (applies to both screen and print) */
+.rx-symbol {
+  font-family: 'Times New Roman', serif;
+  line-height: 1;
+}
+
+/* Invoice Print Styles */
+@media print {
+  /* Hide everything except the invoice */
+  #invoice-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    padding: 20px !important;
+    margin: 0 !important;
+    z-index: 9999 !important;
+  }
+  
+  /* Make invoice area visible */
+  #invoice-print-area,
+  #invoice-print-area * {
+    visibility: visible !important;
+  }
+  
+  /* Hide sidebar, navbar, action buttons for invoice */
+  .invoice-page nav,
+  .invoice-page aside,
+  .invoice-page header,
+  .invoice-page .sidebar,
+  .invoice-page [data-sidebar] {
+    display: none !important;
+  }
+}
+
+/* Thermal Printer (80mm) styles */
+@media print and (max-width: 80mm) {
+  #invoice-print-area {
+    width: 80mm !important;
+    font-size: 10px !important;
+  }
+  #invoice-print-area table {
+    font-size: 9px !important;
+  }
+}
+
+/* ============================================
+   CANTEEN TOKEN - Thermal Printer (80mm roll)
+   ============================================ */
+/* When body has .thermal-printing class, override everything for thermal receipt */
+@media print {
+  body.thermal-printing * {
+    visibility: hidden !important;
+  }
+  body.thermal-printing #thermal-receipt,
+  body.thermal-printing #thermal-receipt * {
+    visibility: visible !important;
+  }
+  body.thermal-printing #thermal-receipt {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    padding: 3mm !important;
+    margin: 0 !important;
+    background: white !important;
+    z-index: 99999 !important;
+  }
+  body.thermal-printing {
+    width: 80mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  /* Override the default A4 page size for thermal printing */
+  body.thermal-printing ~ * {
+    display: none !important;
+  }
+}
+
+/* Thermal-specific page rule — applied via JS by adding class to body */
+@page thermal {
+  size: 80mm auto;
+  margin: 0;
+}
+
+/* ============================================
+   LANDING PAGE DESIGN SYSTEM
+   ============================================ */
+
+:root {
+  /* Landing page palette — isolated from dashboard */
+  --landing-navy: #09090B;
+  --landing-navy-light: #18181B;
+  --landing-teal: #09090B;
+  --landing-teal-hover: #27272A;
+  --landing-teal-light: #F4F4F5;
+  --landing-bg: #FFFFFF;
+  --landing-card: #FFFFFF;
+  --landing-text: #09090B;
+  --landing-text-muted: #71717A;
+  --landing-border: #E4E4E7;
+  --landing-radius: 24px;
+  --landing-radius-lg: 32px;
+  --landing-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+  --landing-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.08);
+}
+
+.font-landing {
+  font-family: var(--font-outfit), var(--font-geist-sans), sans-serif;
+}
+
+/* ---- Scrollbar hide ---- */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+[data-sidebar="content"],
+.sidebar-content {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+[data-sidebar="content"]::-webkit-scrollbar,
+.sidebar-content::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- Keyframe Animations ---- */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInLeft {
+  from { opacity: 0; transform: translateX(-32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeInRight {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.85; }
+}
+@keyframes slideInDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-up     { animation: fadeInUp 0.7s cubic-bezier(0.22,1,0.36,1) forwards; }
+.animate-fade-in-left   { animation: fadeInLeft 0.7s cubic-bezier(0.22,1,0.36,1) forwards; }
+.animate-fade-in-right  { animation: fadeInRight 0.7s cubic-bezier(0.22,1,0.36,1) forwards; }
+.animate-scale-in       { animation: scaleIn 0.6s cubic-bezier(0.22,1,0.36,1) forwards; }
+.animate-float          { animation: float 4s ease-in-out infinite; }
+.animate-pulse-subtle   { animation: pulse-subtle 2s ease-in-out infinite; }
+.animate-slide-in-down  { animation: slideInDown 0.5s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+/* Staggered delay utilities */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+
+/* ---- Landing Card ---- */
+.landing-card {
+  background: var(--landing-card);
+  border-radius: var(--landing-radius);
+  box-shadow: var(--landing-shadow);
+  border: 1px solid var(--landing-border);
+  transition: box-shadow 0.35s cubic-bezier(0.22,1,0.36,1),
+              transform 0.35s cubic-bezier(0.22,1,0.36,1);
+  overflow: hidden;
+}
+.landing-card:hover {
+  box-shadow: var(--landing-shadow-hover);
+  transform: translateY(-4px);
+}
+
+/* ---- Glass morphism ---- */
+.glass {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.glass-dark {
+  background: rgba(11, 37, 69, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ---- Gradient text ---- */
+.text-gradient {
+  background: linear-gradient(135deg, var(--landing-navy) 0%, var(--landing-teal) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.text-gradient-teal {
+  background: linear-gradient(135deg, #13A89E 0%, #0B2545 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ---- Overlay utilities ---- */
+.overlay-dark {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(11,37,69,0.3) 0%, rgba(11,37,69,0.7) 100%);
+}
+.overlay-gradient-right {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(11,37,69,0.8) 0%, rgba(11,37,69,0.1) 60%, transparent 100%);
+}
+
+/* ---- Safe area & scroll ---- */
+.h-safe-area-inset-bottom {
+  height: env(safe-area-inset-bottom, 0px);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* ---- Image cover utility ---- */
+.img-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* ============================================
+   NEUMORPHISM (SOFT UI) DESIGN SYSTEM
+   ============================================ */
+
+/* Base background for neumorphism should be #e0e5ec or similar, set via Tailwind classes like bg-[#e0e5ec] */
+
+.neo-flat {
+  /* Extruded soft surface */
+  box-shadow: 
+    8px 8px 16px rgba(163, 177, 198, 0.6), 
+    -8px -8px 16px rgba(255, 255, 255, 0.8);
+  border: none;
+}
+
+.neo-pressed {
+  /* Inset depressed surface */
+  box-shadow: 
+    inset 8px 8px 16px rgba(163, 177, 198, 0.6), 
+    inset -8px -8px 16px rgba(255, 255, 255, 0.8);
+  border: none;
+}
+
+.neo-button {
+  /* Interactive neumorphic button */
+  box-shadow: 
+    5px 5px 10px rgba(163, 177, 198, 0.6), 
+    -5px -5px 10px rgba(255, 255, 255, 0.8);
+  transition: all 0.2s ease-in-out;
+  border: none;
+}
+
+.neo-button:active {
+  box-shadow: 
+    inset 4px 4px 8px rgba(163, 177, 198, 0.6), 
+    inset -4px -4px 8px rgba(255, 255, 255, 0.8);
+}
+
+.neo-blue-flat {
+  box-shadow: 
+    8px 8px 16px #003B8A, 
+    -8px -8px 16px #0059D0;
+  border: none;
+}
+
+.neo-blue-pressed {
+  box-shadow: 
+    inset 8px 8px 16px #003B8A, 
+    inset -8px -8px 16px #0059D0;
+  border: none;
+}
+
+.neo-blue-button {
+  box-shadow: 
+    5px 5px 10px #003B8A, 
+    -5px -5px 10px #0059D0;
+  transition: all 0.2s ease-in-out;
+  border: none;
+}
+
+.neo-blue-button:active {
+  box-shadow: 
+    inset 4px 4px 8px #003B8A, 
+    inset -4px -4px 8px #0059D0;
+}
+
+/* Hide number input spinner arrows globally */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+@media print {
+  @page {
+    size: auto;
+    margin: 0mm;
+  }
+  
+  body {
+    padding: 10mm;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  table {
+    page-break-inside: auto;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  thead {
+    display: table-header-group;
+  }
+  
+  tfoot {
+    display: table-footer-group;
+  }
+  
+  td, th {
+    page-break-inside: avoid;
+  }
+}

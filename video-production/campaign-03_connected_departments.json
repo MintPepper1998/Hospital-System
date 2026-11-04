@@ -1,0 +1,55 @@
+{
+  "output": "output/03_connected_departments-portrait.mp4",
+  "scenes": [
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\02-demo-patient-registration.mp4",
+      "start": 36,
+      "duration": 6,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "RECEPTION \u2022 REGISTRATION",
+      "title": "Multiple reception desks? Done.",
+      "body": "Support the way your front desk is organized, with a workflow built for your hospital."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\03-demo-opd-consultation.mp4",
+      "start": 40,
+      "duration": 6,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "DOCTOR AVAILABILITY \u2022 OPD",
+      "title": "Give doctors the right availability view.",
+      "body": "Make doctor availability and consultation flow easier for reception and clinical teams to follow."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\04-demo-pharmacy-workflow.mp4",
+      "start": 15,
+      "duration": 6,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "PHARMACY \u2022 HANDOFF",
+      "title": "One connected hospital journey.",
+      "body": "Connect reception, consultation, pharmacy and billing in one hospital-specific system."
+    },
+    {
+      "source": null,
+      "start": 0,
+      "duration": 5,
+      "eyebrow": "HOSPITAL MANAGER",
+      "title": "Book your private demonstration.",
+      "body": "Custom hospital software. Founding Partner pricing available now."
+    }
+  ]
+}

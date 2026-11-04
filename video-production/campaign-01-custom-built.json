@@ -1,0 +1,55 @@
+{
+  "output": "output/01-custom-built-portrait.mp4",
+  "scenes": [
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\01-dashboard-overview.mp4",
+      "start": 7,
+      "duration": 5,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "HOSPITAL MANAGER",
+      "title": "Your hospital is not a template.",
+      "body": "This is not off-the-shelf software. It is a completely custom-built Hospital ERP designed around the way you want to work."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\03-demo-opd-consultation.mp4",
+      "start": 40,
+      "duration": 5,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "OPD \u2022 CONSULTATION \u2022 EMR",
+      "title": "Built around your workflows.",
+      "body": "From OPD and consultation to clinical records, your hospital gets a system shaped around its operations."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\06-hospital-settings-print-preview.mp4",
+      "start": 24,
+      "duration": 5,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "CONFIGURATION \u2022 PRINT \u2022 BRAND",
+      "title": "Your process. Your implementation.",
+      "body": "We configure the workflows, documents and screens your teams actually need."
+    },
+    {
+      "source": null,
+      "start": 0,
+      "duration": 5,
+      "eyebrow": "HOSPITAL MANAGER",
+      "title": "Book your private demonstration.",
+      "body": "Custom hospital software. Founding Partner pricing available now."
+    }
+  ]
+}

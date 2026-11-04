@@ -1,0 +1,457 @@
+
+// ============================================
+// REUSABLE SECTION CARD COMPONENT
+// ============================================
+function SectionCard({ title, icon: Icon, children, headerAction, color = "blue", className = "" }: any) {
+  const colors: Record<string, string> = {
+    blue: "border-blue-200 text-blue-700 bg-blue-50/50",
+    green: "border-green-200 text-green-700 bg-green-50/50",
+    purple: "border-purple-200 text-purple-700 bg-purple-50/50",
+    orange: "border-orange-200 text-orange-700 bg-orange-50/50",
+    red: "border-red-200 text-red-700 bg-red-50/50",
+    slate: "border-slate-200 text-slate-700 bg-slate-50/50",
+  }
+  const colorClass = colors[color] || colors.blue
+
+  return (
+    <Card className={`overflow-hidden border border-slate-200 shadow-sm ${className}`}>
+      <CardHeader className="p-0 border-b bg-slate-50/50">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Icon className={`h-4 w-4 ${colorClass.split(" ")[1]}`} />
+            <h3 className="font-semibold text-sm text-slate-700">{title}</h3>
+          </div>
+          {headerAction && <div>{headerAction}</div>}
+        </div>
+      </CardHeader>
+      <CardContent className="p-4">{children}</CardContent>
+    </Card>
+  )
+}
+
+function OverviewTab({
+  admission,
+  patient,
+  age,
+  daysAdmitted,
+  allNurses,
+  isNurseDialogOpen,
+  setIsNurseDialogOpen,
+  nurseSearchQuery,
+  setNurseSearchQuery,
+  selectedNurseShift,
+  setSelectedNurseShift,
+  nurseCost,
+  setNurseCost,
+  assignedNurses,
+  filteredNurses,
+  handleAssignNurse,
+  handleRemoveNurse,
+}: {
+  admission: SerializedAdmission
+  patient: SerializedPatient
+  age: number | null
+  daysAdmitted: number
+  allNurses?: any[]
+  isNurseDialogOpen?: boolean
+  setIsNurseDialogOpen?: (open: boolean) => void
+  nurseSearchQuery?: string
+  setNurseSearchQuery?: (q: string) => void
+  selectedNurseShift?: string
+  setSelectedNurseShift?: (s: string) => void
+  nurseCost?: string
+  setNurseCost?: (c: string) => void
+  assignedNurses?: any[]
+  filteredNurses?: any[]
+  handleAssignNurse?: (formData: FormData) => void
+  handleRemoveNurse?: (id: string) => void
+}) {
+  const treatingDocs = admission.admissionDoctors?.filter((d: any) => d.role === "TREATING") || [];
+  const roundingDocs = admission.admissionDoctors?.filter((d: any) => d.role === "ROUNDING") || [];
+
+  return (
+    <div className="space-y-6">
+      {/* Patient Header Card */}
+      <Card className="overflow-hidden border-0 shadow-md">
+        <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-6 py-6 text-white relative">
+          <div className="absolute top-0 right-0 p-6 flex gap-3">
+            <Link href={`/dashboard/ipd/print/admission-slip/${admission.id}`} target="_blank">
+              <Button variant="secondary" size="sm" className="bg-white/10 hover:bg-white/20 text-white border-0">
+                Print Slip
+              </Button>
+            </Link>
+            <Link href={`/dashboard/ipd/print/admission-forms/${admission.id}`} target="_blank">
+              <Button variant="secondary" size="sm" className="bg-white/10 hover:bg-white/20 text-white border-0">
+                Forms
+              </Button>
+            </Link>
+            <Button variant="destructive" size="sm" className="bg-red-500 hover:bg-red-600 border-0 shadow-sm">
+              Discharge
+            </Button>
+          </div>
+          
+          <div className="flex items-center gap-6">
+            <div className="relative h-20 w-20 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex-shrink-0 shadow-inner">
+              {patient.profilePhotoUrl ? (
+                <Image src={patient.profilePhotoUrl} alt="Patient" fill className="object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-3xl font-light">
+                  {(patient.user.name || "P").charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h2 className="text-2xl font-semibold tracking-tight">{patient.user.name}</h2>
+                <Badge variant="secondary" className="bg-green-500/20 text-green-100 hover:bg-green-500/30 border-green-500/30">
+                  {admission.status}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-blue-100/80">
+                <div className="flex items-center gap-1.5"><span className="font-medium text-white">UHID:</span> {patient.patientId}</div>
+                <div className="flex items-center gap-1.5"><span className="font-medium text-white">Age:</span> {age ? `${age} Years` : "N/A"}</div>
+                <div className="flex items-center gap-1.5"><span className="font-medium text-white">Gender:</span> {patient.gender || "N/A"}</div>
+                <div className="flex items-center gap-1.5"><span className="font-medium text-white">Blood:</span> {patient.bloodGroup || "N/A"}</div>
+                <div className="flex items-center gap-1.5"><span className="font-medium text-white">Day:</span> {daysAdmitted}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Left Column - Patient Details */}
+        <div className="xl:col-span-2 space-y-6">
+          
+          {/* PATIENT PROFILE */}
+          <SectionCard title="Patient Profile" icon={User} color="blue">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">UHID</p>
+                <p className="text-sm font-medium">{patient.patientId}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Date of Birth</p>
+                <p className="text-sm font-medium">{patient.dateOfBirth ? format(new Date(patient.dateOfBirth), "dd MMM yyyy") : "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Age / Gender</p>
+                <p className="text-sm font-medium">{age ? `${age} Yrs` : "N/A"} / {patient.gender || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Guardian</p>
+                <p className="text-sm font-medium">{patient.fatherOrHusbandName || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Blood Group</p>
+                <p className="text-sm font-medium text-red-600">{patient.bloodGroup || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Marital Status</p>
+                <p className="text-sm font-medium">{patient.maritalStatus || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Religion</p>
+                <p className="text-sm font-medium">{patient.religion || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Nationality</p>
+                <p className="text-sm font-medium">{patient.nationality || "Indian"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Occupation</p>
+                <p className="text-sm font-medium">{patient.occupation || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Referred By</p>
+                <p className="text-sm font-medium">{patient.referredBy || "Self"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Pay Type</p>
+                <p className="text-sm font-medium">{admission.hasInsuranceCoverage ? "Insurance" : "Self Pay"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Registered On</p>
+                <p className="text-sm font-medium">{format(new Date(patient.createdAt), "dd MMM yyyy")}</p>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* ADMISSION DETAILS */}
+          <SectionCard title="Admission Details" icon={Calendar} color="purple">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Admission Date</p>
+                <p className="text-sm font-medium">{format(new Date(admission.admissionDate), "dd MMM yyyy, hh:mm a")}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Current Status</p>
+                <p className="text-sm font-medium text-green-600">{admission.status}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Days of Stay</p>
+                <p className="text-sm font-medium text-orange-600">{daysAdmitted} Days</p>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* CONTACT DETAILS */}
+          <SectionCard title="Contact Details" icon={Phone} color="slate">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+              <div className="flex gap-3">
+                <Phone className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Phone</p>
+                  <p className="text-sm font-medium">{patient.phone || "N/A"}</p>
+                  <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mt-3 mb-1">Emergency Phone</p>
+                  <p className="text-sm font-medium">{patient.emergencyContact || "N/A"}</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="h-4 w-4 shrink-0" />
+                <div>
+                  <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Email</p>
+                  <p className="text-sm font-medium">{patient.user.email || "N/A"}</p>
+                  <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mt-3 mb-1">Emergency Relation</p>
+                  <p className="text-sm font-medium">{patient.emergencyContactRelation || "N/A"} ({patient.emergencyContactName || "N/A"})</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-4 border-t border-slate-100">
+              <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Full Address</p>
+                <p className="text-sm">
+                  {[patient.address, patient.city, patient.state, patient.pincode].filter(Boolean).join(", ") || "N/A"}
+                </p>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* ACCOMMODATION */}
+          <SectionCard title="Accommodation Details" icon={BedDouble} color="purple">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Ward</p>
+                <p className="text-sm font-medium">{admission.bed.ward.name}</p>
+                <p className="text-xs text-slate-500 mt-1">Bed Rate: ₹{admission.bed.pricePerDay}/day</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Floor</p>
+                <p className="text-sm font-medium">{admission.bed.ward.floor || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Bed Number</p>
+                <p className="text-sm font-medium text-blue-600">{admission.bed.bedNumber}</p>
+                <p className="text-xs text-orange-600 mt-1 font-medium">Total: ₹{(admission.bed.pricePerDay * daysAdmitted).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Ward Type</p>
+                <p className="text-sm font-medium">{admission.bed.ward.type}</p>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* DIAGNOSIS & TREATMENT */}
+          <SectionCard title="Diagnosis & Treatment" icon={Stethoscope} color="red">
+            <div className="space-y-4">
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Reason for Admission</p>
+                <p className="text-sm">{admission.reason || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Past Medical History</p>
+                <p className="text-sm">{patient.pastMedicalHistory || patient.medicalHistory || "None"}</p>
+              </div>
+              {admission.diagnosis && (
+                <div>
+                  <p className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1">Current Diagnosis</p>
+                  <p className="text-sm">{admission.diagnosis}</p>
+                </div>
+              )}
+            </div>
+          </SectionCard>
+          
+          {/* DOCUMENTS */}
+          <SectionCard title="Documents & Photos" icon={FileText} color="slate">
+             <div className="flex items-center justify-between">
+                <p className="text-sm text-slate-500">View patient documents in the Notes tab.</p>
+                <Badge variant="outline">{patient.documents?.length || 0} file(s)</Badge>
+             </div>
+          </SectionCard>
+
+        </div>
+
+        {/* Right Column - Status & Billing */}
+        <div className="space-y-6">
+          
+          {/* DOCTOR DETAILS */}
+          <SectionCard title="Doctor Details" icon={UserPlus} color="green">
+            <div className="flex items-start gap-4">
+              <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold shrink-0">
+                {(admission.primaryDoctor.user.name || "D").charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Dr. {admission.primaryDoctor.user.name}</p>
+                <p className="text-xs text-green-700 font-medium uppercase tracking-wider my-0.5">{admission.primaryDoctor.specialization || "General"}</p>
+                <p className="text-xs text-slate-500">{admission.primaryDoctor.department || "Medical"} Dept</p>
+                <Badge variant="secondary" className="mt-2 bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50 text-[10px]">
+                  Treating Doctor
+                </Badge>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* NURSING TEAM */}
+          <SectionCard 
+            title="Nursing Team" 
+            icon={Heart} 
+            color="orange"
+            headerAction={
+              setIsNurseDialogOpen && (
+                <Button variant="ghost" size="sm" onClick={() => setIsNurseDialogOpen(true)} className="h-7 text-xs border border-orange-200 text-orange-700 hover:bg-orange-50 bg-white">
+                  <Plus className="h-3 w-3 mr-1" />
+                  Assign
+                </Button>
+              )
+            }
+          >
+            {assignedNurses?.length === 0 ? (
+              <div className="text-center py-4 text-xs text-slate-500">
+                No nurses assigned yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {assignedNurses?.map((an: any) => (
+                  <div key={an.id} className="flex justify-between items-start pb-3 border-b border-orange-100 last:border-0 last:pb-0">
+                    <div className="flex gap-2">
+                      <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold shrink-0 text-[10px]">
+                        {an.nurse?.user?.name?.charAt(0) || "N"}
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium">{an.nurse?.user?.name}</p>
+                        <p className="text-[10px] text-slate-500">{an.shift} Shift &bull; ₹{an.cost}</p>
+                      </div>
+                    </div>
+                    {handleRemoveNurse && (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-red-600" onClick={() => handleRemoveNurse(an.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+          
+          {/* NURSING DIALOG INJECTION */}
+          {setIsNurseDialogOpen && isNurseDialogOpen && (
+            <Dialog open={isNurseDialogOpen} onOpenChange={setIsNurseDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Assign Nurse</DialogTitle>
+                  <DialogDescription>Assign a nurse to manage care for this admission.</DialogDescription>
+                </DialogHeader>
+                <form action={handleAssignNurse} className="space-y-4 mt-2">
+                  <div className="space-y-2">
+                    <Label>Search Nurse</Label>
+                    <Input 
+                      placeholder="Search..." 
+                      value={nurseSearchQuery || ""}
+                      onChange={(e: any) => setNurseSearchQuery && setNurseSearchQuery(e.target.value)}
+                    />
+                    <div className="border rounded-md max-h-40 overflow-y-auto mt-2 p-1">
+                      {filteredNurses?.map((n: any) => (
+                        <label key={n.id} className="flex items-center gap-2 p-2 hover:bg-orange-50 rounded cursor-pointer">
+                          <input type="radio" name="nurseId" value={n.id} required />
+                          <span className="text-sm">{n.user.name}</span>
+                        </label>
+                      ))}
+                      {filteredNurses?.length === 0 && <div className="p-2 text-sm text-slate-500">No nurses found.</div>}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Shift</Label>
+                      <select name="shift" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={selectedNurseShift} onChange={(e: any) => setSelectedNurseShift && setSelectedNurseShift(e.target.value)}>
+                        <option value="Morning">Morning</option>
+                        <option value="Evening">Evening</option>
+                        <option value="Night">Night</option>
+                        <option value="General">General</option>
+                        <option value="Full Day">Full Day</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Cost (₹)</Label>
+                      <Input type="number" name="cost" required value={nurseCost} onChange={(e: any) => setNurseCost && setNurseCost(e.target.value)} />
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700">Assign Nurse</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* INSURANCE / SPONSOR */}
+          <SectionCard title="Insurance / Sponsor" icon={Shield} color="blue">
+            {admission.hasInsuranceCoverage ? (
+              <div className="text-center py-4">
+                <Shield className="h-8 w-8 text-blue-500 mx-auto mb-2 opacity-50" />
+                <p className="text-sm font-medium text-blue-700">Covered by Insurance</p>
+                {admission.insuranceApprovedAmount && (
+                  <p className="text-xs text-slate-500 mt-1">Approved: ₹{admission.insuranceApprovedAmount}</p>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <Shield className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-medium text-slate-600">Self Pay</p>
+                <p className="text-xs text-slate-400 mt-1">No insurance or scheme linked</p>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* LATEST VITALS */}
+          <SectionCard title="Latest Vitals" icon={Activity} color="red">
+            <div className="text-center py-6">
+              <Activity className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">No vitals recorded yet</p>
+            </div>
+          </SectionCard>
+
+          {/* PAYMENT INFORMATION */}
+          <SectionCard title="Payment Information" icon={CreditCard} color="orange">
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Bed Charges ({daysAdmitted}d)</span>
+                <span>₹{(admission.bed.pricePerDay * daysAdmitted).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm font-medium pt-3 border-t border-slate-100">
+                <span>Total Bill</span>
+                <span>₹{admission.totalBillAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm text-green-600">
+                <span>Advance Deposit</span>
+                <span>-₹{admission.initialDeposit.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-base font-bold pt-3 border-t border-slate-200 text-red-600">
+                <span>Balance Due</span>
+                <span>₹{(admission.totalBillAmount - admission.initialDeposit).toLocaleString()}</span>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* BED TRANSFER HISTORY */}
+          <SectionCard title="Bed Transfer History" icon={BedDouble} color="blue" headerAction={<Button variant="ghost" size="sm" className="h-7 text-xs border border-blue-200 text-blue-700 bg-white">Transfer Bed</Button>}>
+             <div className="text-center py-4 text-xs text-slate-500">
+               <BedDouble className="h-6 w-6 text-slate-300 mx-auto mb-1" />
+               <p>No bed transfers</p>
+               <p className="text-[10px] mt-1">Patient has been in the same bed since admission.</p>
+             </div>
+          </SectionCard>
+
+        </div>
+      </div>
+    </div>
+  )
+}

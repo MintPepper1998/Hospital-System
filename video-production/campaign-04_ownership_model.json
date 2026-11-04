@@ -1,0 +1,55 @@
+{
+  "output": "output/04_ownership_model-portrait.mp4",
+  "scenes": [
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\01-dashboard-overview.mp4",
+      "start": 20,
+      "duration": 5,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "OWN YOUR OPERATIONS",
+      "title": "Stop adapting to rigid software.",
+      "body": "Build the operational model your hospital needs instead of forcing every department into a fixed template."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\06-hospital-settings-print-preview.mp4",
+      "start": 24,
+      "duration": 6,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "CUSTOMIZATION \u2022 DOCUMENTS",
+      "title": "A lifetime license, not a monthly subscription.",
+      "body": "We are offering a one-time lifetime license so your hospital owns the software it invests in."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\05-demo-billing-visibilit.mp4",
+      "start": 14,
+      "duration": 6,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "CLEAR COMMERCIAL VALUE",
+      "title": "Invest in your hospital's system.",
+      "body": "Ask us about implementation, support and the ownership terms behind Hospital Manager."
+    },
+    {
+      "source": null,
+      "start": 0,
+      "duration": 5,
+      "eyebrow": "HOSPITAL MANAGER",
+      "title": "Book your private demonstration.",
+      "body": "Custom hospital software. Founding Partner pricing available now."
+    }
+  ]
+}

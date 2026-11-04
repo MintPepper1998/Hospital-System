@@ -1,0 +1,64 @@
+{
+  "output": "output/hindi-avatar-ad.mp4",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "font_preference": "Nirmala UI",
+  "logo": null,
+  "scenes": [
+    {
+      "name": "opening-avatar",
+      "kind": "avatar",
+      "source": "C:/Users/biswa/Downloads/vv/01-video-01-hindi-opening.mp4",
+      "start": 0,
+      "duration": 10,
+      "caption": "क्या आपका हॉस्पिटल सॉफ्टवेयर\nआपकी टीम के काम करने के तरीके के अनुसार नहीं चलता?"
+    },
+    {
+      "name": "logo-transition",
+      "kind": "plate",
+      "duration": 1,
+      "caption": "Hospital Manager"
+    },
+    {
+      "name": "dashboard",
+      "kind": "product",
+      "source": "C:/Users/biswa/Videos/hospital video/01-dashboard-overview.mp4",
+      "start": 7,
+      "duration": 4.75,
+      "caption": "आपके हॉस्पिटल के अनुसार\nबनाया गया सिस्टम"
+    },
+    {
+      "name": "opd",
+      "kind": "product",
+      "source": "C:/Users/biswa/Videos/hospital video/03-demo-opd-consultation.mp4",
+      "start": 40,
+      "duration": 4.75,
+      "caption": "OPD से कंसल्टेशन तक\nएक जुड़ा हुआ वर्कफ़्लो"
+    },
+    {
+      "name": "pharmacy",
+      "kind": "product",
+      "source": "C:/Users/biswa/Videos/hospital video/04-demo-pharmacy-workflow.mp4",
+      "start": 12,
+      "duration": 4.75,
+      "caption": "प्रिस्क्रिप्शन से फार्मेसी तक\nस्पष्ट हैंडऑफ"
+    },
+    {
+      "name": "billing",
+      "kind": "product",
+      "source": "C:/Users/biswa/Videos/hospital video/05-demo-billing-visibilit.mp4",
+      "start": 2,
+      "duration": 4.75,
+      "caption": "बिलिंग और वित्तीय जानकारी\nएक ही दृश्य में"
+    },
+    {
+      "name": "closing-avatar",
+      "kind": "avatar",
+      "source": "C:/Users/biswa/Downloads/vv/01-video-01-hindi-closing.mp4",
+      "start": 0,
+      "duration": 10,
+      "caption": "अपना प्राइवेट Hospital Manager\nडेमो बुक करें"
+    }
+  ]
+}

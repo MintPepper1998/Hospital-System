@@ -1,0 +1,77 @@
+{
+  "output": "output/facebook-ad-hindi-square.mp4",
+  "width": 1080,
+  "height": 1080,
+  "fps": 30,
+  "font_preference": "Nirmala UI",
+  "brand_name": "Shree Kamal Hospital ERP",
+  "brand_tagline": "Life Matters",
+  "phone": "8144308300",
+  "logo": "C:/Users/biswa/Shree-Kamal/public/shree-kamal-logo.png",
+  "scenes": [
+    {
+      "name": "intro",
+      "kind": "plate",
+      "duration": 4.0,
+      "headline": "क्या आपका अस्पताल अभी भी\nपुराने तरीके से चल रहा है?",
+      "subtext": "कागज़ · मैन्युअल बिलिंग · देरी · गलतियाँ",
+      "accent": "PROBLEM"
+    },
+    {
+      "name": "dashboard",
+      "kind": "product",
+      "source": "C:/Users/biswa/Videos/hospital video/01-dashboard-overview.mp4",
+      "start": 7,
+      "duration": 5.0,
+      "caption": "एक सॉफ्टवेयर — पूरा अस्पताल\n30+ मॉड्यूल, एक Dashboard"
+    },
+    {
+      "name": "registration",
+      "kind": "product",
+      "source": "C:/Users/biswa/Videos/hospital video/02-demo-patient-registration.mp4",
+      "start": 15,
+      "duration": 5.0,
+      "caption": "Patient Registration\nसिर्फ 2 मिनट में — Digital OPD"
+    },
+    {
+      "name": "opd",
+      "kind": "product",
+      "source": "C:/Users/biswa/Videos/hospital video/03-demo-opd-consultation.mp4",
+      "start": 40,
+      "duration": 5.0,
+      "caption": "OPD Consultation\nडॉक्टर का पूरा वर्कफ़्लो — एक स्क्रीन पर"
+    },
+    {
+      "name": "pharmacy",
+      "kind": "product",
+      "source": "C:/Users/biswa/Videos/hospital video/04-demo-pharmacy-workflow.mp4",
+      "start": 12,
+      "duration": 5.0,
+      "caption": "Pharmacy Billing — GST Ready\nइन्वेंटरी · Expiry Alert · POS"
+    },
+    {
+      "name": "billing",
+      "kind": "product",
+      "source": "C:/Users/biswa/Videos/hospital video/05-demo-billing-visibilit.mp4",
+      "start": 2,
+      "duration": 5.0,
+      "caption": "बिलिंग और फाइनेंस\nहर हिसाब एक नज़र में"
+    },
+    {
+      "name": "features",
+      "kind": "plate",
+      "duration": 5.0,
+      "headline": "30+ मॉड्यूल — सब एक में",
+      "subtext": "OPD · IPD · Lab · Pharmacy · Billing\nHR · WhatsApp · OT · EMR · Reports",
+      "accent": "FEATURES"
+    },
+    {
+      "name": "cta",
+      "kind": "cta",
+      "duration": 6.0,
+      "headline": "🎁 Special Offer — Free Demo",
+      "subtext": "📞 8144308300\nWhatsApp करें — अभी!",
+      "accent": "CTA"
+    }
+  ]
+}

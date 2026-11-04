@@ -1,0 +1,989 @@
+return (
+    <div className={`flex flex-col bg-white overflow-hidden rounded-xl border border-slate-200 border-t-[3px] ${theme.border} shadow-sm ${className} transition-all duration-200`}>
+      <div 
+        className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors ${isExpanded ? 'border-b border-slate-100' : ''}`}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-2">
+          <Icon className={`h-4 w-4 ${theme.text}`} />
+          <h3 className={`font-semibold text-sm ${theme.text} select-none`}>{title}</h3>
+        </div>
+        <div className="flex items-center gap-3">
+          {headerAction && <div onClick={(e) => e.stopPropagation()}>{headerAction}</div>}
+          <button className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100">
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+      {isExpanded && (
+        <div className="p-4 animate-in fade-in duration-200">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function PatientDashboardClient({
+  admission,
+  age,
+  daysAdmitted,
+  dietPlans,
+}: PatientDashboardClientProps) {
+  const patient = admission.patient
+
+  return (
+    <Tabs defaultValue="overview" className="space-y-6">
+      <TabsList className="grid grid-cols-4 md:grid-cols-8 w-full max-w-5xl h-auto">
+        <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <User className="h-4 w-4" />
+          <span className="hidden sm:inline">Overview</span>
+          <span className="sm:hidden">Info</span>
+        </TabsTrigger>
+        <TabsTrigger value="notes" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <FileText className="h-4 w-4" />
+          Notes
+        </TabsTrigger>
+        <TabsTrigger value="medications" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <Pill className="h-4 w-4" />
+          <span className="hidden sm:inline">Medications</span>
+          <span className="sm:hidden">Meds</span>
+        </TabsTrigger>
+        <TabsTrigger value="investigations" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <FlaskConical className="h-4 w-4" />
+          <span className="hidden sm:inline">Investigations</span>
+          <span className="sm:hidden">Labs</span>
+        </TabsTrigger>
+        <TabsTrigger value="equipment" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <Package className="h-4 w-4" />
+          <span className="hidden sm:inline">Equipment</span>
+          <span className="sm:hidden">Equip</span>
+        </TabsTrigger>
+        <TabsTrigger value="charts" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <BarChart3 className="h-4 w-4" />
+          Vitals
+        </TabsTrigger>
+        <TabsTrigger value="summary" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <ClipboardList className="h-4 w-4" />
+          Summary
+        </TabsTrigger>
+        <TabsTrigger value="diet" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <UtensilsCrossed className="h-4 w-4" />
+          <span className="hidden sm:inline">Diet & Meals</span>
+          <span className="sm:hidden">Diet</span>
+        </TabsTrigger>
+      </TabsList>
+
+      {/* ============================================ */}
+      {/* TAB 1: Overview & Vitals */}
+      {/* ============================================ */}
+      <TabsContent value="overview" className="space-y-6">
+        <OverviewTab admission={admission} patient={patient} age={age} daysAdmitted={daysAdmitted} />
+      </TabsContent>
+
+      {/* ============================================ */}
+      {/* TAB 2: Clinical Notes */}
+      {/* ============================================ */}
+      <TabsContent value="notes" className="space-y-6">
+        <ClinicalNotesTab admission={admission} />
+      </TabsContent>
+
+      {/* ============================================ */}
+      {/* TAB 3: Medications */}
+      {/* ============================================ */}
+      <TabsContent value="medications" className="space-y-6">
+        <MedicationChart
+          admissionId={admission.id}
+          admissionStatus={admission.status}
+          doctorName={admission.primaryDoctor.user.name || "Doctor"}
+          prescriptions={admission.ipdPrescriptions}
+        />
+      </TabsContent>
+
+      {/* ============================================ */}
+      {/* TAB 4: Investigations (Lab & Radiology) */}
+      {/* ============================================ */}
+      <TabsContent value="investigations" className="space-y-6">
+        <LabOrders
+          admissionId={admission.id}
+          admissionStatus={admission.status}
+          doctorName={admission.primaryDoctor.user.name || "Doctor"}
+          labRequests={admission.ipdLabRequests}
+        />
+      </TabsContent>
+
+      {/* ============================================ */}
+      {/* TAB 5: Equipment & Supplies */}
+      {/* ============================================ */}
+      <TabsContent value="equipment" className="space-y-6">
+        <IPDEquipmentTracker
+          admissionId={admission.id}
+          admissionStatus={admission.status}
+        />
+      </TabsContent>
+
+      {/* ============================================ */}
+      {/* TAB 6: Vital Charts */}
+      {/* ============================================ */}
+      <TabsContent value="charts" className="space-y-6">
+        <VitalChartsTab admission={admission} />
+      </TabsContent>
+
+      {/* ============================================ */}
+      {/* TAB 6: Discharge Summary Editor */}
+      {/* ============================================ */}
+      <TabsContent value="summary" className="space-y-6">
+        <DischargeEditor
+          admissionId={admission.id}
+          admissionStatus={admission.status}
+          doctorName={admission.primaryDoctor.user.name || "Doctor"}
+          initialData={{
+            finalDiagnosis: admission.finalDiagnosis,
+            proceduresDone: admission.proceduresDone,
+            courseInHospital: admission.courseInHospital,
+            treatmentGiven: admission.treatmentGiven,
+            conditionAtDischarge: admission.conditionAtDischarge,
+            adviceOnDischarge: admission.adviceOnDischarge,
+            followUpDate: admission.followUpDate,
+          }}
+          activeMedications={admission.ipdPrescriptions
+            .filter((rx) => rx.status === "ACTIVE")
+            .map((rx) => ({
+              medicineName: rx.medicineName,
+              dosage: rx.dosage,
+              frequency: rx.frequency,
+              duration: rx.duration,
+              instruction: rx.instruction,
+            }))}
+        />
+      </TabsContent>
+      {/* ============================================ */}
+      {/* TAB 8: Diet & Meals */}
+      {/* ============================================ */}
+      <TabsContent value="diet" className="space-y-6">
+        <PatientDietTab
+          admissionId={admission.id}
+          admissionStatus={admission.status}
+          doctorName={admission.primaryDoctor.user.name || "Doctor"}
+          dietPlans={dietPlans}
+          canteenDiets={admission.canteenDiets}
+        />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+// ============================================
+// TAB 1: OVERVIEW & VITALS
+// ============================================
+
+function OverviewTab({
+  admission,
+  patient,
+  age,
+  daysAdmitted,
+}: {
+  admission: SerializedAdmission
+  patient: SerializedPatient
+  age: number | null
+  daysAdmitted: number
+}) {
+  // Get latest vitals from most recent clinical note
+  const latestNote = admission.clinicalNotes[0]
+
+  return (
+    <div className="space-y-6">
+      {/* Patient Header Card Ethereal Glow */}
+      <div className="relative rounded-[1.5rem] bg-slate-50/50 p-1.5 ring-1 ring-slate-200/50 shadow-sm mb-6">
+        <div className="relative overflow-hidden rounded-[calc(1.5rem-6px)] bg-[#0A0F1C] text-white">
+          {/* Ethereal Glow */}
+          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-blue-500/20 blur-[64px]" />
+          <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-indigo-500/20 blur-[64px]" />
+          
+          <div className="relative px-8 py-7">
+            <div className="absolute top-0 right-0 p-6 flex items-center gap-3">
+              <Link href={`/dashboard/ipd/print/admission-slip/${admission.id}`} target="_blank">
+                <Button variant="outline" size="sm" className="bg-white/5 hover:bg-white/10 text-slate-100 border-white/10 transition-all rounded-full px-5 hover:scale-[0.98]">
+                  Print Slip
+                </Button>
+              </Link>
+              <Link href={`/dashboard/ipd/print/admission-forms/${admission.id}`} target="_blank">
+                <Button variant="outline" size="sm" className="bg-white/5 hover:bg-white/10 text-slate-100 border-white/10 transition-all rounded-full px-5 hover:scale-[0.98]">
+                  Forms
+                </Button>
+              </Link>
+              <Button size="sm" className="bg-red-500/90 hover:bg-red-600 text-white shadow-lg shadow-red-500/20 transition-all rounded-full px-5 hover:scale-[0.98]">
+                Discharge
+              </Button>
+            </div>
+            
+            <div className="flex items-center gap-6">
+              <div className="relative h-20 w-20 rounded-[1.2rem] ring-1 ring-white/20 overflow-hidden bg-white/5 flex-shrink-0 shadow-2xl shadow-black/50">
+                {patient.profilePhotoUrl ? (
+                  <Image src={patient.profilePhotoUrl} alt="Patient" fill className="object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-3xl font-light text-white/50">
+                    {(patient.user.name || "P").charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="pt-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h2 className="text-3xl font-bold tracking-tight text-slate-50">{patient.user.name}</h2>
+                  <Badge className="bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/20 rounded-full px-3 shadow-inner font-medium">
+                    {admission.status}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-300/80 font-medium">
+                  <div className="flex items-center gap-1.5"><span className="text-slate-500">UHID</span> <span className="text-slate-200">{patient.patientId}</span></div>
+                  <div className="flex items-center gap-1.5"><span className="text-slate-500">Age</span> <span className="text-slate-200">{age !== null ? `${age} Years` : "N/A"}</span></div>
+                  <div className="flex items-center gap-1.5"><span className="text-slate-500">Gender</span> <span className="text-slate-200">{patient.gender || "N/A"}</span></div>
+                  <div className="flex items-center gap-1.5"><span className="text-slate-500">Blood</span> <span className="text-slate-200">{patient.bloodGroup || "N/A"}</span></div>
+                  <div className="flex items-center gap-1.5"><span className="text-slate-500">Day</span> <span className="text-slate-200">{daysAdmitted}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Latest Vitals Card */}
+      {latestNote && (latestNote.bp || latestNote.pulse || latestNote.temperature || latestNote.spO2) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Activity className="h-4 w-4 text-red-500" />
+              Latest Vitals
+              <span className="text-xs text-muted-foreground font-normal ml-auto">
+                {formatDistanceToNow(new Date(latestNote.date), { addSuffix: true })}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {latestNote.bp && (
+                <VitalCard icon={Heart} label="Blood Pressure" value={latestNote.bp} color="text-red-500" bgColor="bg-red-50" />
+              )}
+              {latestNote.pulse && (
+                <VitalCard icon={Activity} label="Pulse Rate" value={latestNote.pulse} color="text-orange-500" bgColor="bg-orange-50" />
+              )}
+              {latestNote.temperature && (
+                <VitalCard icon={Thermometer} label="Temperature" value={latestNote.temperature} color="text-yellow-600" bgColor="bg-yellow-50" />
+              )}
+              {latestNote.spO2 && (
+                <VitalCard icon={Droplets} label="SpO2" value={latestNote.spO2} color="text-blue-500" bgColor="bg-blue-50" />
+              )}
+              {latestNote.respiratoryRate && (
+                <VitalCard icon={Wind} label="Resp. Rate" value={latestNote.respiratoryRate} color="text-green-500" bgColor="bg-green-50" />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Two Column Layout: Patient Details + Admission Details */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Patient Contact & Identity */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Patient Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {patient.phone && (
+              <DetailRow icon={Phone} label="Phone" value={patient.phone} />
+            )}
+            {patient.emergencyContact && (
+              <DetailRow icon={Phone} label="Emergency" value={patient.emergencyContact} />
+            )}
+            {(patient.address || patient.city) && (
+              <DetailRow
+                icon={MapPin}
+                label="Address"
+                value={[patient.address, patient.city, patient.state, patient.pincode]
+                  .filter(Boolean)
+                  .join(", ")}
+              />
+            )}
+            {patient.aadharNumber && (
+              <DetailRow icon={CreditCard} label="Aadhaar" value={patient.aadharNumber} />
+            )}
+            {patient.bskyNumber && (
+              <DetailRow icon={Shield} label="BSKY No." value={patient.bskyNumber} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Admission Details */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Admission Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {admission.reason && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Reason for Admission</p>
+                <p className="text-sm">{admission.reason}</p>
+              </div>
+            )}
+            {admission.diagnosis && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Diagnosis</p>
+                <p className="text-sm">{admission.diagnosis}</p>
+              </div>
+            )}
+            {admission.treatmentPlan && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Treatment Plan</p>
+                <p className="text-sm">{admission.treatmentPlan}</p>
+              </div>
+            )}
+            {patient.pastMedicalHistory && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Past Medical History</p>
+                <p className="text-sm whitespace-pre-line">{patient.pastMedicalHistory}</p>
+              </div>
+            )}
+            <div className="border-t pt-3">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Billing Summary</p>
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Total Bill</p>
+                    <p className="font-semibold">₹{admission.totalBillAmount?.toLocaleString("en-IN") || 0}</p>
+                  </div>
+                  {admission.hasInsuranceCoverage && admission.insuranceApprovedAmount !== undefined ? (
+                    <>
+                      <div>
+                        <p className="text-muted-foreground">Ins. Approved</p>
+                        <p className="font-semibold text-blue-600">₹{admission.insuranceApprovedAmount.toLocaleString("en-IN")}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Ins. Covered</p>
+                        <p className="font-semibold text-green-600">₹{admission.insuranceCoveredAmount?.toLocaleString("en-IN") || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Your Liability</p>
+                        <p className={`font-semibold ${admission.patientLiability && admission.patientLiability > 0 ? "text-red-600" : ""}`}>
+                          ₹{admission.patientLiability?.toLocaleString("en-IN") || 0}
+                        </p>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+                
+                <div className="bg-muted p-2 rounded-md flex justify-between items-center text-sm">
+                  <div>
+                    <span className="text-muted-foreground mr-2">Deposit Paid:</span>
+                    <span className="font-medium">₹{admission.initialDeposit?.toLocaleString("en-IN") || 0}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground mr-2">Final Balance:</span>
+                    <span className={`font-bold ${admission.balanceDue > 0 ? "text-red-600" : "text-green-600"}`}>
+                      ₹{admission.balanceDue?.toLocaleString("en-IN") || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Actions */}
+      {admission.status === "ADMITTED" && (
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium mr-2">Quick Actions</span>
+              <Link href={`/dashboard/ipd/print/admission-forms/${admission.id}`} target="_blank">
+                <Button variant="outline" size="sm" className="h-8 text-xs">
+                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+                  Print Bedside Charts
+                </Button>
+              </Link>
+              <Link href={`/dashboard/ipd/print/summary/${admission.id}`} target="_blank">
+                <Button variant="outline" size="sm" className="h-8 text-xs">
+                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+                  Print Discharge Summary
+                </Button>
+              </Link>
+              <Link href={`/dashboard/ipd/discharge/${admission.id}`}>
+                <Button variant="outline" size="sm" className="h-8 text-xs border-red-200 text-red-600 hover:bg-red-50">
+                  Initiate Discharge
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Documents Gallery */}
+      <DocumentsGallery patient={patient} />
+    </div>
+  )
+}
+
+// ============================================
+// VITAL CARD COMPONENT
+// ============================================
+
+function VitalCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+  bgColor,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+  color: string
+  bgColor: string
+}) {
+  return (
+    <div className={`${bgColor} rounded-lg p-3 border`}>
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className={`h-4 w-4 ${color}`} />
+        <span className="text-xs text-muted-foreground">{label}</span>
+      </div>
+      <p className="text-lg font-bold">{value}</p>
+    </div>
+  )
+}
+
+// ============================================
+// DETAIL ROW COMPONENT
+// ============================================
+
+function DetailRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <Icon className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-sm">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// DOCUMENTS GALLERY
+// ============================================
+
+function DocumentsGallery({ patient }: { patient: SerializedPatient }) {
+  const allDocuments: { title: string; url: string; type: string; source: string }[] = []
+
+  // Add identity documents
+  if (patient.aadharCardUrl) {
+    allDocuments.push({
+      title: "Aadhaar Card",
+      url: patient.aadharCardUrl,
+      type: patient.aadharCardUrl.endsWith(".pdf") ? "application/pdf" : "image/jpeg",
+      source: "identity",
+    })
+  }
+  if (patient.bskyCardUrl) {
+    allDocuments.push({
+      title: "BSKY Card",
+      url: patient.bskyCardUrl,
+      type: patient.bskyCardUrl.endsWith(".pdf") ? "application/pdf" : "image/jpeg",
+      source: "identity",
+    })
+  }
+
+  // Add uploaded documents
+  patient.documents.forEach((doc) => {
+    allDocuments.push({
+      title: doc.title,
+      url: doc.fileUrl,
+      type: doc.fileType,
+      source: "upload",
+    })
+  })
+
+  if (allDocuments.length === 0 && !patient.profilePhotoUrl) return null
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <FileText className="h-4 w-4 text-purple-500" />
+          Documents & Photos
+          <Badge variant="secondary" className="text-xs ml-auto">
+            {allDocuments.length} file(s)
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          {allDocuments.map((doc, index) => (
+            <DocumentCard key={index} title={doc.title} url={doc.url} type={doc.type} />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================
+// DOCUMENT CARD
+// ============================================
+
+function DocumentCard({
+  title,
+  url,
+  type,
+}: {
+  title: string
+  url: string
+  type: string
+}) {
+  const isPdf = type === "application/pdf" || url.toLowerCase().endsWith(".pdf")
+
+  return (
+    <div className="group border rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+      {/* Preview Area */}
+      <div className="relative aspect-[4/3] bg-gray-100">
+        {isPdf ? (
+          <div className="flex flex-col items-center justify-center h-full bg-red-50">
+            <FileText className="h-10 w-10 text-red-500 mb-2" />
+            <span className="text-xs text-red-600 font-medium">PDF Document</span>
+          </div>
+        ) : (
+          <Image
+            src={url}
+            alt={title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          />
+        )}
+
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="secondary" className="h-8">
+              <Eye className="h-3 w-3 mr-1" />
+              View
+            </Button>
+          </a>
+          <a href={url} download>
+            <Button size="sm" variant="secondary" className="h-8">
+              <Download className="h-3 w-3 mr-1" />
+            </Button>
+          </a>
+        </div>
+      </div>
+
+      {/* Title */}
+      <div className="p-2">
+        <p className="text-xs font-medium truncate">{title}</p>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// TAB 2: CLINICAL NOTES
+// ============================================
+
+function ClinicalNotesTab({ admission }: { admission: SerializedAdmission }) {
+  const [notes, setNotes] = useState(admission.clinicalNotes)
+  const [isPending, startTransition] = useTransition()
+
+  // Form state
+  const [noteText, setNoteText] = useState("")
+  const [bp, setBp] = useState("")
+  const [pulse, setPulse] = useState("")
+  const [temperature, setTemperature] = useState("")
+  const [spO2, setSpO2] = useState("")
+  const [respiratoryRate, setRespiratoryRate] = useState("")
+
+  const handleAddNote = () => {
+    if (!noteText.trim()) {
+      toast.error("Please enter a note")
+      return
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await addClinicalNote({
+          admissionId: admission.id,
+          authorId: "current-user", // TODO: Replace with actual auth user ID
+          authorName: admission.primaryDoctor.user.name || "Doctor",
+          note: noteText,
+          bp: bp || undefined,
+          pulse: pulse || undefined,
+          temperature: temperature || undefined,
+          spO2: spO2 || undefined,
+          respiratoryRate: respiratoryRate || undefined,
+        })
+
+        if (result.success) {
+          toast.success("Clinical note added")
+
+          // Add to local state for instant feedback
+          const newNote: SerializedClinicalNote = {
+            id: result.noteId,
+            admissionId: admission.id,
+            authorId: "current-user",
+            authorName: admission.primaryDoctor.user.name || "Doctor",
+            date: new Date().toISOString(),
+            note: noteText,
+            bp: bp || null,
+            pulse: pulse || null,
+            temperature: temperature || null,
+            spO2: spO2 || null,
+            respiratoryRate: respiratoryRate || null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+
+          setNotes((prev) => [newNote, ...prev])
+
+          // Clear form
+          setNoteText("")
+          setBp("")
+          setPulse("")
+          setTemperature("")
+          setSpO2("")
+          setRespiratoryRate("")
+        }
+      } catch (error: any) {
+        toast.error(error.message || "Failed to add note")
+      }
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Add Note Form */}
+      {admission.status === "ADMITTED" && (
+        <Card className="border-blue-200 bg-blue-50/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Plus className="h-4 w-4 text-blue-600" />
+              Add Clinical Note
+            </CardTitle>
+            <CardDescription>Daily progress note with vitals</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="noteText">Clinical Note *</Label>
+              <Textarea
+                id="noteText"
+                placeholder="Patient condition, observations, orders, plan..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                rows={4}
+                className="bg-white"
+              />
+            </div>
+
+            {/* Vitals Grid */}
+            <div>
+              <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+                Vitals (Optional)
+              </Label>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-2">
+                <div className="space-y-1">
+                  <Label htmlFor="bp" className="text-xs flex items-center gap-1">
+                    <Heart className="h-3 w-3 text-red-500" /> BP
+                  </Label>
+                  <Input
+                    id="bp"
+                    placeholder="120/80"
+                    value={bp}
+                    onChange={(e) => setBp(e.target.value)}
+                    className="bg-white h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="pulse" className="text-xs flex items-center gap-1">
+                    <Activity className="h-3 w-3 text-orange-500" /> Pulse
+                  </Label>
+                  <Input
+                    id="pulse"
+                    placeholder="72 bpm"
+                    value={pulse}
+                    onChange={(e) => setPulse(e.target.value)}
+                    className="bg-white h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="temp" className="text-xs flex items-center gap-1">
+                    <Thermometer className="h-3 w-3 text-yellow-600" /> Temp
+                  </Label>
+                  <Input
+                    id="temp"
+                    placeholder="98.6°F"
+                    value={temperature}
+                    onChange={(e) => setTemperature(e.target.value)}
+                    className="bg-white h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="spo2" className="text-xs flex items-center gap-1">
+                    <Droplets className="h-3 w-3 text-blue-500" /> SpO2
+                  </Label>
+                  <Input
+                    id="spo2"
+                    placeholder="98%"
+                    value={spO2}
+                    onChange={(e) => setSpO2(e.target.value)}
+                    className="bg-white h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="rr" className="text-xs flex items-center gap-1">
+                    <Wind className="h-3 w-3 text-green-500" /> Resp Rate
+                  </Label>
+                  <Input
+                    id="rr"
+                    placeholder="18/min"
+                    value={respiratoryRate}
+                    onChange={(e) => setRespiratoryRate(e.target.value)}
+                    className="bg-white h-9"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Button
+              onClick={handleAddNote}
+              disabled={isPending || !noteText.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Note
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Notes Timeline */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <FileText className="h-4 w-4 text-green-500" />
+            Clinical Notes Timeline
+            <Badge variant="secondary" className="text-xs ml-auto">
+              {notes.length} note(s)
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {notes.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">No clinical notes yet</p>
+              <p className="text-sm">Add the first clinical note above.</p>
+            </div>
+          ) : (
+            <div className="relative">
+              {/* Timeline line */}
+              <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-200" />
+
+              <div className="space-y-6">
+                {notes.map((note, index) => (
+                  <div key={note.id} className="relative pl-10">
+                    {/* Timeline dot */}
+                    <div
+                      className={`absolute left-2.5 top-1 w-3 h-3 rounded-full border-2 border-white shadow ${
+                        index === 0 ? "bg-blue-500" : "bg-gray-400"
+                      }`}
+                    />
+
+                    <div className="bg-gray-50 rounded-lg border p-4 space-y-3">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          <span className="font-medium text-sm">
+                            Vital Report
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(note.date), "dd MMM yyyy, hh:mm a")}
+                        </span>
+                      </div>
+
+                      {/* Note content */}
+                      <p className="text-sm whitespace-pre-line">{note.note}</p>
+
+                      {/* Vitals (if present) */}
+                      {(note.bp || note.pulse || note.temperature || note.spO2 || note.respiratoryRate) && (
+                        <div className="flex flex-wrap gap-2 pt-2 border-t">
+                          {note.bp && (
+                            <Badge variant="outline" className="text-xs">
+                              <Heart className="h-3 w-3 text-red-500 mr-1" />
+                              BP: {note.bp}
+                            </Badge>
+                          )}
+                          {note.pulse && (
+                            <Badge variant="outline" className="text-xs">
+                              <Activity className="h-3 w-3 text-orange-500 mr-1" />
+                              Pulse: {note.pulse}
+                            </Badge>
+                          )}
+                          {note.temperature && (
+                            <Badge variant="outline" className="text-xs">
+                              <Thermometer className="h-3 w-3 text-yellow-600 mr-1" />
+                              Temp: {note.temperature}
+                            </Badge>
+                          )}
+                          {note.spO2 && (
+                            <Badge variant="outline" className="text-xs">
+                              <Droplets className="h-3 w-3 text-blue-500 mr-1" />
+                              SpO2: {note.spO2}
+                            </Badge>
+                          )}
+                          {note.respiratoryRate && (
+                            <Badge variant="outline" className="text-xs">
+                              <Wind className="h-3 w-3 text-green-500 mr-1" />
+                              RR: {note.respiratoryRate}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ============================================
+// TAB 3: VITAL CHARTS (Placeholder)
+// ============================================
+
+function VitalChartsTab({ admission }: { admission: SerializedAdmission }) {
+  const hasVitals = admission.clinicalNotes.some(
+    (n) => n.bp || n.pulse || n.temperature || n.spO2 || n.respiratoryRate
+  )
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-blue-500" />
+          Vital Signs Trend
+        </CardTitle>
+        <CardDescription>
+          Visual trends of patient vitals over the admission period
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!hasVitals ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <BarChart3 className="h-16 w-16 mx-auto mb-4 opacity-20" />
+            <p className="font-medium text-lg">No Vital Data Available</p>
+            <p className="text-sm mt-2">
+              Vital charts will appear here once clinical notes with vitals are recorded.
+            </p>
+            <p className="text-xs mt-4 max-w-md mx-auto">
+              Add vitals (BP, Pulse, Temperature, SpO2, Respiratory Rate) while adding clinical
+              notes in the &quot;Clinical Notes&quot; tab.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Summary of recorded vitals */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm font-medium text-blue-900 mb-2">Vitals Data Summary</p>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    <span className="text-muted-foreground">Total Recordings:</span>{" "}
+                    <span className="font-medium">
+                      {admission.clinicalNotes.filter(
+                        (n) => n.bp || n.pulse || n.temperature || n.spO2
+                      ).length}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Date Range:</span>{" "}
+                    <span className="font-medium">
+                      {admission.clinicalNotes.length > 0
+                        ? `${format(
+                            new Date(admission.clinicalNotes[admission.clinicalNotes.length - 1].date),
+                            "dd MMM"
+                          )} — ${format(new Date(admission.clinicalNotes[0].date), "dd MMM yyyy")}`
+                        : "—"}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <p className="text-sm font-medium text-amber-900 mb-2">Coming Soon</p>
+                <p className="text-sm text-amber-800">
+                  Interactive line charts for BP, Pulse, Temperature, and SpO2 trends will be
+                  available in the next update. Data is being collected.
+                </p>
+              </div>
+            </div>
+
+            {/* Vitals Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-3 text-muted-foreground font-medium">Date</th>
+                    <th className="text-left py-2 px-3 text-muted-foreground font-medium">BP</th>
+                    <th className="text-left py-2 px-3 text-muted-foreground font-medium">Pulse</th>
+                    <th className="text-left py-2 px-3 text-muted-foreground font-medium">Temp</th>
+                    <th className="text-left py-2 px-3 text-muted-foreground font-medium">SpO2</th>
+                    <th className="text-left py-2 px-3 text-muted-foreground font-medium">RR</th>
+                    <th className="text-left py-2 px-3 text-muted-foreground font-medium">By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {admission.clinicalNotes
+                    .filter((n) => n.bp || n.pulse || n.temperature || n.spO2 || n.respiratoryRate)
+                    .map((note) => (
+                      <tr key={note.id} className="border-b hover:bg-gray-50">
+                        <td className="py-2 px-3 text-xs">
+                          {format(new Date(note.date), "dd MMM, HH:mm")}
+                        </td>
+                        <td className="py-2 px-3">{note.bp || "—"}</td>
+                        <td className="py-2 px-3">{note.pulse || "—"}</td>
+                        <td className="py-2 px-3">{note.temperature || "—"}</td>
+                        <td className="py-2 px-3">{note.spO2 || "—"}</td>
+                        <td className="py-2 px-3">{note.respiratoryRate || "—"}</td>
+                        <td className="py-2 px-3 text-xs text-muted-foreground">
+                          {note.authorName || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

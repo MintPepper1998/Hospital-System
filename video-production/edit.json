@@ -1,0 +1,58 @@
+{
+  "output": "output/video-01-custom-fit-portrait.mp4",
+  "scenes": [
+    {
+      "source": "C:/Users/biswa/Videos/hospital video/01-dashboard-overview.mp4",
+      "start": 7.0,
+      "duration": 5.0,
+      "crop": [0, 0, 1920, 1080],
+      "eyebrow": "A CLEARER OPERATING VIEW",
+      "title": "Your hospital is not a template.",
+      "body": "Software should fit the way your teams work — not force every hospital into the same process."
+    },
+    {
+      "source": "C:/Users/biswa/Videos/hospital video/03-demo-opd-consultation.mp4",
+      "start": 40.0,
+      "duration": 6.0,
+      "crop": [0, 0, 1920, 1080],
+      "eyebrow": "OPD • CONSULTATION • EMR",
+      "title": "Keep the patient journey connected.",
+      "body": "Move from the OPD queue to consultation and clinical records in one coherent workflow."
+    },
+    {
+      "source": "C:/Users/biswa/Videos/hospital video/04-demo-pharmacy-workflow.mp4",
+      "start": 12.0,
+      "duration": 6.0,
+      "crop": [0, 0, 1920, 1080],
+      "eyebrow": "PHARMACY WORKFLOW",
+      "title": "Make every handoff visible.",
+      "body": "From prescription to pharmacy billing, give each department the next step it needs."
+    },
+    {
+      "source": "C:/Users/biswa/Videos/hospital video/05-demo-billing-visibilit.mp4",
+      "start": 2.0,
+      "duration": 7.0,
+      "crop": [0, 0, 1920, 1080],
+      "eyebrow": "FINANCE • BILLING • LEDGER",
+      "title": "See the charges behind the total.",
+      "body": "Bring billing, collections and financial visibility into a workflow your team can review."
+    },
+    {
+      "source": "C:/Users/biswa/Videos/hospital video/06-hospital-settings-print-preview.mp4",
+      "start": 24.0,
+      "duration": 6.0,
+      "crop": [0, 0, 1920, 1080],
+      "eyebrow": "CONFIGURATION • PRINT • BRAND",
+      "title": "Built around your hospital.",
+      "body": "Start with the workflow that matters most. Review the fit, define the scope and plan the rollout."
+    },
+    {
+      "source": null,
+      "start": 0,
+      "duration": 5.0,
+      "eyebrow": "HOSPITAL SOFTWARE",
+      "title": "Book a private workflow demonstration.",
+      "body": "A focused conversation about your hospital process using a clear, synthetic product demonstration."
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+file 'D:/Shree-Kamal/video-production/work/facebook-ad/fb-scene-00.mp4'
+file 'D:/Shree-Kamal/video-production/work/facebook-ad/fb-scene-01.mp4'
+file 'D:/Shree-Kamal/video-production/work/facebook-ad/fb-scene-02.mp4'
+file 'D:/Shree-Kamal/video-production/work/facebook-ad/fb-scene-03.mp4'
+file 'D:/Shree-Kamal/video-production/work/facebook-ad/fb-scene-04.mp4'
+file 'D:/Shree-Kamal/video-production/work/facebook-ad/fb-scene-05.mp4'
+file 'D:/Shree-Kamal/video-production/work/facebook-ad/fb-scene-06.mp4'
+file 'D:/Shree-Kamal/video-production/work/facebook-ad/fb-scene-07.mp4'

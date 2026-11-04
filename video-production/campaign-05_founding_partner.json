@@ -1,0 +1,55 @@
+{
+  "output": "output/05_founding_partner-portrait.mp4",
+  "scenes": [
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\03-demo-opd-consultation.mp4",
+      "start": 70,
+      "duration": 6,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "SEE IT IN ACTION",
+      "title": "Do not buy another generic demo.",
+      "body": "Bring us your workflow and see how Hospital Manager maps it across clinical and operational teams."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\05-demo-billing-visibilit.mp4",
+      "start": 42,
+      "duration": 6,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "FOUNDING PARTNER PROGRAM",
+      "title": "Be one of the first hospitals to shape the system.",
+      "body": "Founding Partners receive exclusive pricing and a direct path to a hospital-specific implementation."
+    },
+    {
+      "source": "C:\\Users\\biswa\\Videos\\hospital video\\06-hospital-settings-print-preview.mp4",
+      "start": 34,
+      "duration": 5,
+      "crop": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "eyebrow": "NEXT STEP",
+      "title": "Your hospital. Your workflow.",
+      "body": "Book a private demonstration and let us understand what your hospital needs."
+    },
+    {
+      "source": null,
+      "start": 0,
+      "duration": 5,
+      "eyebrow": "HOSPITAL MANAGER",
+      "title": "Book your private demonstration.",
+      "body": "Custom hospital software. Founding Partner pricing available now."
+    }
+  ]
+}

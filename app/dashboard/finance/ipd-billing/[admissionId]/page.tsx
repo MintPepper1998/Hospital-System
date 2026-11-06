@@ -2,9 +2,10 @@ import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { IPDBillingClient } from "./ipd-billing-client"
 
-export default async function IPDBillingPage({ params }: { params: { admissionId: string } }) {
+export default async function IPDBillingPage({ params }: { params: Promise<{ admissionId: string }> }) {
+  const { admissionId } = await params
   const admission = await prisma.iPDAdmission.findUnique({
-    where: { id: params.admissionId },
+    where: { id: admissionId },
     include: {
       patient: true,
       primaryDoctor: { include: { user: true } },

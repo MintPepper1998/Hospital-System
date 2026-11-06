@@ -7,8 +7,9 @@ import { getLowStockMedicines } from "@/app/actions/purchase-order"
 export default async function NewPurchaseOrderRoute({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined }
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
+  const resolvedSearchParams = await searchParams
   const authResult = await requireAuthSafe(["SUPER_ADMIN", "PHARMACIST"])
   if (!authResult.ok) redirect("/login")
 
@@ -23,7 +24,7 @@ export default async function NewPurchaseOrderRoute({
   })
 
   let autoItems = null
-  if (searchParams.auto === "true") {
+  if (resolvedSearchParams.auto === "true") {
     const res = await getLowStockMedicines()
     if (res.success && res.data) {
       autoItems = res.data.map((item: any) => ({

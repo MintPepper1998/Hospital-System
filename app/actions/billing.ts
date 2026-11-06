@@ -1,5 +1,6 @@
 "use server"
 
+import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { requireAuthSafe } from "@/lib/auth-guard"
 import { writeAuditLog } from "@/lib/audit"
@@ -82,7 +83,19 @@ export interface BillBreakdown {
   // Government scheme
   isBsky: boolean
   // Payment history
-  payments: { amount: number; mode: string; date: string; notes: string | null }[]
+  payments: {
+    id: string
+    billNumber?: string
+    amount: number
+    mode: string
+    date: string
+    notes: string | null
+    splitDetails?: {
+      cash?: number
+      upi?: number
+      card?: number
+    } | null
+  }[]
   dischargeDate?: string | null
 }
 
@@ -550,12 +563,48 @@ export async function calculateFinalBill(
     // If it's already billed, totalPaidViaPayments includes it. Otherwise, add it manually.
     const totalAmountPaid = (isDepositBilled ? 0 : advanceDeposit) + totalPaidViaPayments
     
-    const payments: BillBreakdown["payments"] = paymentRecords.map(p => ({
-      amount: p.paidAmount || 0,
-      mode: p.paymentMethod || "CASH",
-      date: p.billDate.toISOString(),
-      notes: p.notes || null,
-    }))
+    // Fetch any split transactions if split amounts were stored only in Transaction table
+    const splitPaymentIdsWithoutCols = paymentRecords
+      .filter(p => p.paymentMethod === "SPLIT" && !p.splitCashAmount && !p.splitUpiAmount && !p.splitCardAmount)
+      .map(p => p.id)
+
+    const fallbackSplitMap = new Map<string, { cash?: number; upi?: number; card?: number }>()
+    if (splitPaymentIdsWithoutCols.length > 0) {
+      const splitTxs = await prisma.transaction.findMany({
+        where: { referenceId: { in: splitPaymentIdsWithoutCols } }
+      })
+      for (const st of splitTxs) {
+        if (!st.referenceId) continue
+        const existing = fallbackSplitMap.get(st.referenceId) || {}
+        if (st.paymentMethod === "CASH") existing.cash = (existing.cash || 0) + st.amount
+        else if (st.paymentMethod === "UPI") existing.upi = (existing.upi || 0) + st.amount
+        else if (st.paymentMethod === "CARD") existing.card = (existing.card || 0) + st.amount
+        fallbackSplitMap.set(st.referenceId, existing)
+      }
+    }
+
+    const payments: BillBreakdown["payments"] = paymentRecords.map(p => {
+      let splitDetails: { cash?: number; upi?: number; card?: number } | null = null
+      if (p.paymentMethod === "SPLIT" || p.splitCashAmount || p.splitUpiAmount || p.splitCardAmount) {
+        const fallback = fallbackSplitMap.get(p.id)
+        const cash = (p.splitCashAmount ?? fallback?.cash) || undefined
+        const upi = (p.splitUpiAmount ?? fallback?.upi) || undefined
+        const card = (p.splitCardAmount ?? fallback?.card) || undefined
+        if (cash || upi || card) {
+          splitDetails = { cash, upi, card }
+        }
+      }
+
+      return {
+        id: p.id,
+        billNumber: p.billNumber,
+        amount: p.paidAmount || 0,
+        mode: p.paymentMethod || "CASH",
+        date: p.billDate.toISOString(),
+        notes: p.notes || null,
+        splitDetails,
+      }
+    })
 
     const netPayable = subtotal - totalAmountPaid
 
@@ -903,6 +952,103 @@ export async function processIpdPayment(
   } catch (error: any) {
     console.error("[ERROR] processIpdPayment:", error)
     return { success: false, message: error.message || "Failed to process payment" }
+  }
+}
+
+// ============================================
+// REVERSE IPD PAYMENT
+// ============================================
+
+export async function reverseIpdPayment(billingId: string, reason?: string) {
+  const authResult = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT", "ADMIN"])
+  if (!authResult.ok) return { success: false, message: authResult.error }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Fetch the billing record
+      const bill = await tx.billing.findUnique({
+        where: { id: billingId },
+        include: { ipdAdmission: true }
+      })
+
+      if (!bill) {
+        throw new Error("Payment record not found")
+      }
+      if (bill.type !== "IPD" || bill.status !== "PAID") {
+        throw new Error("Only completed IPD payment receipts can be reversed")
+      }
+
+      const amountToReverse = bill.paidAmount || bill.totalAmount || 0
+      const admissionId = bill.ipdAdmissionId
+
+      // 2. Find and reverse financial transactions
+      const transactions = await tx.transaction.findMany({
+        where: { referenceId: billingId }
+      })
+
+      for (const t of transactions) {
+        if (t.accountId && t.amount > 0) {
+          await tx.financialAccount.update({
+            where: { id: t.accountId },
+            data: { currentBalance: { decrement: t.amount } }
+          })
+        }
+      }
+
+      // Delete the transactions
+      if (transactions.length > 0) {
+        await tx.transaction.deleteMany({
+          where: { referenceId: billingId }
+        })
+      }
+
+      // 3. Update IPD admission amountPaid
+      if (admissionId) {
+        await tx.iPDAdmission.update({
+          where: { id: admissionId },
+          data: {
+            amountPaid: { decrement: amountToReverse }
+          }
+        })
+      }
+
+      // 4. Delete the billing payment record
+      await tx.billing.delete({
+        where: { id: billingId }
+      })
+
+      return {
+        billNumber: bill.billNumber,
+        amount: amountToReverse,
+        admissionId
+      }
+    })
+
+    writeAuditLog({
+      userId: authResult.session.userId,
+      action: "DELETE",
+      module: "IPDPayment",
+      recordId: billingId,
+      changes: {
+        billNumber: result.billNumber,
+        reversedAmount: result.amount,
+        admissionId: result.admissionId,
+        reason: reason || "Payment reversed by user"
+      }
+    })
+
+    if (result.admissionId) {
+      revalidatePath(`/dashboard/billing-counter/ipd`)
+      revalidatePath(`/dashboard/ipd/patient/${result.admissionId}`)
+    }
+
+    return { 
+      success: true, 
+      message: `Payment ${result.billNumber} of ₹${result.amount.toLocaleString('en-IN')} reversed successfully. Amount restored to pending balance.` 
+    }
+  } catch (error: any) {
+    console.error("[ERROR] reverseIpdPayment:", error)
+    return { success: false, message: error.message || "Failed to reverse payment" }
   }
 }
 

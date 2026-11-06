@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, ChevronRight, ChevronDown, User, Pill, FlaskConical, DollarSign, Activity, FileText, CheckCircle2, AlertCircle, Phone, MapPin, Bed, Scissors, HeartPulse, Percent, Tag, Printer, X as XIcon, Plus, Monitor, Trash2, Calendar, ArrowLeft } from "lucide-react"
+import { Search, ChevronRight, ChevronDown, User, Pill, FlaskConical, DollarSign, Activity, FileText, CheckCircle2, AlertCircle, Phone, MapPin, Bed, Scissors, HeartPulse, Percent, Tag, Printer, X as XIcon, Plus, Monitor, Trash2, Calendar, ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { ProcessPaymentDialog } from "./process-payment-dialog"
-import { applyDiscount, addCustomCharge, removeCustomCharge } from "@/app/actions/billing"
+import { applyDiscount, addCustomCharge, removeCustomCharge, reverseIpdPayment } from "@/app/actions/billing"
 import { assignNurse } from "@/app/actions/ipd-nursing"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -179,6 +179,28 @@ export function BillingDashboardClient({ admissions, nurses }: { admissions: any
       }
     } catch (err: any) {
       toast.error(err.message || "Error removing charge")
+    }
+  }
+
+  const [reversingPaymentId, setReversingPaymentId] = useState<string | null>(null)
+
+  const handleReversePayment = async (paymentId: string, paymentLabel: string) => {
+    if (!confirm(`Are you sure you want to reverse payment ${paymentLabel}? This will remove the receipt, adjust financial accounts, and add the amount back to the pending balance.`)) {
+      return
+    }
+    setReversingPaymentId(paymentId)
+    try {
+      const res = await reverseIpdPayment(paymentId)
+      if (res.success) {
+        toast.success(res.message)
+        refreshPage()
+      } else {
+        toast.error(res.message || "Failed to reverse payment")
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error reversing payment")
+    } finally {
+      setReversingPaymentId(null)
     }
   }
 
@@ -1030,12 +1052,68 @@ export function BillingDashboardClient({ admissions, nurses }: { admissions: any
                       {bd?.payments?.length > 0 && (
                         <div className="pt-3 border-t border-gray-100">
                           <div className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2">Payment History</div>
-                          {bd.payments.map((p: any, i: number) => (
-                            <div key={i} className="flex justify-between items-center py-1.5 text-xs font-medium text-gray-500">
-                              <span>{new Date(p.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} · {p.mode}</span>
-                              <span className="text-green-600 font-semibold">₹{p.amount.toLocaleString("en-IN")}</span>
-                            </div>
-                          ))}
+                          <div className="space-y-2">
+                            {bd.payments.map((p: any, i: number) => {
+                              const isSplit = p.mode === "SPLIT" || !!p.splitDetails
+                              const splitParts: { label: string; amount: number }[] = []
+                              if (p.splitDetails?.cash && p.splitDetails.cash > 0) splitParts.push({ label: "Cash", amount: p.splitDetails.cash })
+                              if (p.splitDetails?.upi && p.splitDetails.upi > 0) splitParts.push({ label: "UPI", amount: p.splitDetails.upi })
+                              if (p.splitDetails?.card && p.splitDetails.card > 0) splitParts.push({ label: "Card", amount: p.splitDetails.card })
+
+                              const dateStr = new Date(p.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+
+                              return (
+                                <div key={p.id || i} className="p-2 rounded-xl bg-gray-50/80 border border-gray-100 hover:bg-gray-50 transition-colors">
+                                  <div className="flex justify-between items-center text-xs font-medium text-gray-700">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-semibold text-gray-800">{dateStr}</span>
+                                      <span>·</span>
+                                      <span className={`font-bold ${isSplit ? "text-indigo-600" : "text-gray-900"}`}>{p.mode}</span>
+                                      {isSplit && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                          SPLIT
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-green-600 font-bold">₹{p.amount.toLocaleString("en-IN")}</span>
+                                      {p.id && (
+                                        <button
+                                          type="button"
+                                          disabled={reversingPaymentId === p.id}
+                                          onClick={() => handleReversePayment(p.id, `₹${p.amount.toLocaleString("en-IN")} (${dateStr} - ${p.mode})`)}
+                                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                          title="Reverse / Remove this payment"
+                                        >
+                                          {reversingPaymentId === p.id ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
+                                          ) : (
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          )}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {isSplit && splitParts.length > 0 && (
+                                    <div className="mt-1 pl-1 text-[11px] font-semibold text-indigo-700 flex items-center gap-2 flex-wrap">
+                                      <span className="text-gray-400 font-normal">↳ Breakdown:</span>
+                                      {splitParts.map((sp, idx) => (
+                                        <span key={idx} className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-indigo-100 shadow-2xs">
+                                          <span className="text-gray-500 font-medium">{sp.label}:</span>
+                                          <span className="font-bold text-gray-900">₹{sp.amount.toLocaleString("en-IN")}</span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {p.notes && (
+                                    <div className="mt-1 pl-1 text-[10px] text-gray-400 italic">
+                                      {p.notes}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
                         </div>
                       )}
                       

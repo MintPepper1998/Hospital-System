@@ -6,13 +6,14 @@ import { NewPurchaseOrderPage } from "@/components/pharmacy/new-purchase-order-p
 export default async function EditPurchaseOrderRoute({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params
   const authResult = await requireAuthSafe(["SUPER_ADMIN", "PHARMACIST"])
   if (!authResult.ok) redirect("/login")
 
   const po = await prisma.purchaseOrder.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       supplier: true,
       items: {

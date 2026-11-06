@@ -38,7 +38,7 @@ export default async function PrintSummaryPage({ params }: PrintSummaryPageProps
   const dischargeTypesConfig = await prisma.dischargeTypeConfig.findMany({
     where: { isActive: true }
   })
-  const selectedType = dischargeTypesConfig.find(t => t.code === d.dischargeTypeCode)
+  const selectedType = dischargeTypesConfig.find(t => t.code === (d as any).dischargeTypeCode)
 
   return (
     <PrintSummaryClient>
@@ -239,8 +239,8 @@ export default async function PrintSummaryPage({ params }: PrintSummaryPageProps
         {selectedType?.templateSections && Array.isArray(selectedType.templateSections) && selectedType.templateSections.length > 0 ? (
           <>
             {selectedType.templateSections.map((section: any) => {
-              const customData = d.customDischargeData as any;
-              const val = customData?.[section.sectionKey] || d[section.sectionKey as keyof typeof d];
+              const customData = (d as any).customDischargeData as any;
+              const val = customData?.[section.sectionKey] || (d as any)[section.sectionKey];
               if (!val) return null;
               return (
                 <div key={section.sectionKey}>

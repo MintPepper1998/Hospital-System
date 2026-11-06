@@ -52,7 +52,7 @@ export function AutomationsClient({ initialRules, templates }: { initialRules: R
     const payload = {
       eventName: eventId,
       isActive: data.isActive !== undefined ? data.isActive : currentData.isActive,
-      templateId: data.templateId !== undefined ? data.templateId : (currentData.templateId || ""),
+      templateId: (data.templateId !== undefined ? data.templateId : currentData.templateId) || "",
       delayMinutes: data.delayMinutes !== undefined ? data.delayMinutes : currentData.delayMinutes
     }
 

@@ -253,9 +253,9 @@ export async function getPatientConsolidatedDues(params: {
       OR: [
         ...(params.partyId && params.partyId !== "cmr2ingkh0002la1bt5dwujcj" ? [{ id: params.partyId }] : []),
         ...(cleanName ? [
-          { user: { name: { contains: cleanName, mode: "insensitive" } } },
-          { patientId: { contains: cleanName, mode: "insensitive" } },
-          { phone: { contains: cleanName, mode: "insensitive" } },
+          { user: { name: { contains: cleanName, mode: "insensitive" as const } } },
+          { patientId: { contains: cleanName, mode: "insensitive" as const } },
+          { phone: { contains: cleanName, mode: "insensitive" as const } },
         ] : []),
       ]
     },
@@ -274,8 +274,8 @@ export async function getPatientConsolidatedDues(params: {
       OR: [
         ...(params.partyId && params.partyId !== "cmr2ingkh0002la1bt5dwujcj" ? [{ id: params.partyId }] : []),
         ...(cleanName ? [
-          { name: { contains: cleanName, mode: "insensitive" } },
-          { phone: { contains: cleanName, mode: "insensitive" } },
+          { name: { contains: cleanName, mode: "insensitive" as const } },
+          { phone: { contains: cleanName, mode: "insensitive" as const } },
         ] : []),
       ]
     },
@@ -299,8 +299,8 @@ export async function getPatientConsolidatedDues(params: {
         ...(patientIds.length > 0 ? [{ patientId: { in: patientIds } }] : []),
         ...(customerIds.length > 0 ? [{ pharmacyCustomerId: { in: customerIds } }] : []),
         ...(cleanName ? [
-          { patient: { user: { name: { contains: cleanName, mode: "insensitive" } } } },
-          { pharmacyCustomer: { name: { contains: cleanName, mode: "insensitive" } } },
+          { patient: { user: { name: { contains: cleanName, mode: "insensitive" as const } } } },
+          { pharmacyCustomer: { name: { contains: cleanName, mode: "insensitive" as const } } },
         ] : []),
       ]
     },

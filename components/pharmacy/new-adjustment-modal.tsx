@@ -64,7 +64,7 @@ export function NewAdjustmentModal({ isOpen, onClose, adjustmentToEdit }: NewAdj
     setIsSearching(true)
     const result = await searchInventoryBatches(query)
     if (result.success) {
-      setSearchResults(result.data)
+      setSearchResults(result.data || [])
     }
     setIsSearching(false)
   }

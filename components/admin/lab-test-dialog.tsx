@@ -426,8 +426,6 @@ export function LabTestDialog({ open, onOpenChange, test, testType = "PATHOLOGY"
       return copy
     })
   }
-  setCollapsedSections({}); setOptionInput({})
-}, [test, open, testType])
 
 const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0]

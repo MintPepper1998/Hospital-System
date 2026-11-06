@@ -74,11 +74,12 @@ export async function triggerAutomation(eventName: string, phone: string, dynami
     await prisma.whatsAppLog.create({
       data: {
         phone,
-        template: rule.templateId,
+        templateName: rule.templateId,
         language: "en",
-        category: "REMINDER", // Maps to appropriate category
+        category: "REMINDER",
         status: "SENT",
-        providerId: `auto-${Date.now()}`
+        params: {},
+        messageId: `auto-${Date.now()}`
       }
     })
 

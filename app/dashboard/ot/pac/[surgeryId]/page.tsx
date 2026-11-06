@@ -13,7 +13,7 @@ export default async function PACClearancePage(props: { params: Promise<{ surger
   return (
     <div className="min-h-screen bg-slate-50/50 p-4 md:p-8">
       <div className="max-w-5xl mx-auto">
-        <PACClearanceForm surgery={res.surgery} />
+        <PACClearanceForm surgery={res.surgery as any} />
       </div>
     </div>
   )

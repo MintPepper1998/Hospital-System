@@ -88,7 +88,7 @@ export async function getChallans(): Promise<{ success: boolean; data?: ChallanL
     return { success: true, data }
   } catch (error) {
     console.error("[ERROR] getChallans:", error)
-    return actionError(getErrorMessage(error))
+    return { success: false, message: getErrorMessage(error) }
   }
 }
 
@@ -138,7 +138,7 @@ export async function getChallanById(id: string): Promise<{ success: boolean; da
     }
   } catch (error) {
     console.error("[ERROR] getChallanById:", error)
-    return actionError(getErrorMessage(error))
+    return { success: false, message: getErrorMessage(error) }
   }
 }
 

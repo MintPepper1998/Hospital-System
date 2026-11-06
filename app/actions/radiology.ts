@@ -1,6 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { requireAuthSafe } from "@/lib/auth-guard"
 import { createMultiRoleNotification } from "@/lib/create-notification"
@@ -79,7 +80,7 @@ const DEFAULT_RADIOLOGIST = {
 }
 
 export async function getRadiologyEntryContext(requestId: string) {
-  const authResult = await requireAuthSafe(["SUPER_ADMIN", "LAB_TECHNICIAN", "DOCTOR", "STAFF"])
+  const authResult = await requireAuthSafe(["SUPER_ADMIN", "ADMIN", "LAB_TECHNICIAN", "DOCTOR"])
   if (!authResult.ok) {
     return { success: false, message: authResult.error }
   }
@@ -397,7 +398,7 @@ export async function saveRadiologyReport(input: SaveRadiologyReportInput) {
         where: { id: requestId },
         data: {
           result: combinedResult,
-          parameterResults: reportData as unknown as Record<string, unknown>,
+          parameterResults: reportData as unknown as Prisma.InputJsonValue,
           status: "COMPLETED",
           completedAt: new Date(),
         },
@@ -438,7 +439,7 @@ export async function saveRadiologyReport(input: SaveRadiologyReportInput) {
         data: {
           reportContent: reportData.interpretation.trim(),
           impression: fullImpression || null,
-          parameterResults: reportData as unknown as Record<string, unknown>,
+          parameterResults: reportData as unknown as Prisma.InputJsonValue,
           performedBy: signingRadiologist.name,
           status: "COMPLETED",
           completedAt: new Date(),

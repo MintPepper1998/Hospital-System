@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { ArrowLeft, Bandage, ExternalLink } from "lucide-react"
+import { ArrowLeft, Bandage, Printer, Stethoscope } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { BillingForm } from "@/components/billing-counter/billing-form"
@@ -40,6 +40,26 @@ interface CasualtyVisitData {
     amount: number
     appointmentId: string | null
   } | null
+  appointmentId?: string | null
+  hasOpdConsultation?: boolean
+  opdDoctorName?: string | null
+  opdItems?: Array<{
+    id?: string
+    description: string
+    quantity: number
+    unitPrice: number
+    serviceCategory: string
+  }>
+  opdTotal?: number
+  diagnosticItems?: Array<{
+    id?: string
+    description: string
+    quantity: number
+    unitPrice: number
+    serviceCategory: string
+  }>
+  diagnosticTotal?: number
+  hasDiagnostics?: boolean
   procedures: Array<{
     id: string
     name: string
@@ -80,23 +100,62 @@ function CasualtyBillingContent() {
   const getPrefilledItems = (): (BillLineItem & { isAutoDetected?: boolean })[] => {
     if (!selectedVisit) return []
 
-    if (selectedVisit.pendingBillItems && selectedVisit.pendingBillItems.length > 0) {
-      return selectedVisit.pendingBillItems.map((item) => ({
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        serviceCategory: item.serviceCategory || "PROCEDURE",
-        isAutoDetected: true,
-      }))
+    const list: (BillLineItem & { isAutoDetected?: boolean })[] = []
+
+    // 1. OPD Consultation items (when an OPD booking/consultation was made under casualty)
+    if (selectedVisit.opdItems && selectedVisit.opdItems.length > 0) {
+      for (const item of selectedVisit.opdItems) {
+        list.push({
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          serviceCategory: item.serviceCategory || "CONSULTATION",
+          isAutoDetected: true,
+        })
+      }
     }
 
-    return selectedVisit.procedures.map((p) => ({
-      description: `${p.name}${p.category !== "GENERAL" ? ` (${p.category})` : ""}`,
-      quantity: p.quantity,
-      unitPrice: p.unitPrice,
-      serviceCategory: "PROCEDURE",
-      isAutoDetected: true,
-    }))
+    // 2. Casualty procedures / pending casualty bill items
+    if (selectedVisit.pendingBillItems && selectedVisit.pendingBillItems.length > 0) {
+      for (const item of selectedVisit.pendingBillItems) {
+        if (!list.some((existing) => existing.description === item.description)) {
+          list.push({
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            serviceCategory: item.serviceCategory || "PROCEDURE",
+            isAutoDetected: true,
+          })
+        }
+      }
+    } else if (selectedVisit.procedures && selectedVisit.procedures.length > 0) {
+      for (const p of selectedVisit.procedures) {
+        list.push({
+          description: `${p.name}${p.category !== "GENERAL" ? ` (${p.category})` : ""}`,
+          quantity: p.quantity,
+          unitPrice: p.unitPrice,
+          serviceCategory: "PROCEDURE",
+          isAutoDetected: true,
+        })
+      }
+    }
+
+    // 3. Diagnostics items (Pathology & Radiology investigations)
+    if (selectedVisit.diagnosticItems && selectedVisit.diagnosticItems.length > 0) {
+      for (const diag of selectedVisit.diagnosticItems) {
+        if (!list.some((existing) => existing.description === diag.description)) {
+          list.push({
+            description: diag.description,
+            quantity: diag.quantity,
+            unitPrice: diag.unitPrice,
+            serviceCategory: diag.serviceCategory || "DIAGNOSTIC",
+            isAutoDetected: true,
+          })
+        }
+      }
+    }
+
+    return list
   }
 
   const queueItems = visits.map((v) => {
@@ -105,12 +164,19 @@ function CasualtyBillingContent() {
         ? v.pendingBillAmount
         : v.totalAmount ?? v.procedureTotal) ?? 0
 
-    let sublabel = v.hasPendingBill
-      ? `Pending Bill ${v.pendingBillNumber || ""} • ₹${amount.toLocaleString("en-IN")}`
-      : `${v.procedures.length} procedure(s) • ₹${amount.toLocaleString("en-IN")}`
+    const hasOpd = (v.opdItems && v.opdItems.length > 0) || v.hasOpdConsultation
+    const parts: string[] = []
+    if (hasOpd) parts.push(`OPD (${v.doctorName})`)
+    if (v.procedures.length > 0) parts.push(`${v.procedures.length} proc`)
+    if (v.diagnosticItems && v.diagnosticItems.length > 0) parts.push(`${v.diagnosticItems.length} tests`)
 
-    if (v.linkedPendingOpdBill) {
-      sublabel += ` (+ OPD ₹${v.linkedPendingOpdBill.amount})`
+    let sublabel = ""
+    if (parts.length > 0) {
+      sublabel = `${parts.join(" + ")} • ₹${amount.toLocaleString("en-IN")}`
+    } else if (v.hasPendingBill) {
+      sublabel = `Pending Bill ${v.pendingBillNumber || ""} • ₹${amount.toLocaleString("en-IN")}`
+    } else {
+      sublabel = `₹${amount.toLocaleString("en-IN")}`
     }
 
     const label = v.chiefComplaint
@@ -167,19 +233,35 @@ function CasualtyBillingContent() {
         </div>
 
         <div className="lg:col-span-8">
-          {selectedVisit?.linkedPendingOpdBill && (
-            <div className="mb-4 p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900 shadow-sm">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-amber-800">⚠️ Pending OPD Consultation Bill:</span>
-                <span className="font-bold text-zinc-800">{selectedVisit.linkedPendingOpdBill.billNumber}</span>
-                <span>• ₹{selectedVisit.linkedPendingOpdBill.amount}</span>
+          {selectedVisit?.appointmentId && (
+            <div className="mb-4 p-3.5 bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200 rounded-xl flex items-center justify-between text-xs text-violet-900 shadow-xs flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-violet-100 text-violet-700 rounded-lg flex-shrink-0">
+                  <Stethoscope className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="font-bold text-violet-900 text-sm">
+                    OPD Consultation: Dr. {selectedVisit.doctorName}
+                  </p>
+                  <p className="text-[11px] text-violet-600 font-medium">
+                    Consolidated into this Casualty bill. Consultation + procedures/tests are billed in 1 single invoice.
+                  </p>
+                </div>
               </div>
-              <Link
-                href={`/dashboard/billing-counter/opd?appointmentId=${selectedVisit.linkedPendingOpdBill.appointmentId || ""}`}
-                className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800 underline bg-white/80 px-2.5 py-1 rounded-md shadow-xs transition-colors"
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="bg-white border-violet-300 text-violet-700 hover:bg-violet-100 font-semibold shadow-xs text-xs"
+                onClick={() =>
+                  window.open(
+                    `/dashboard/clinical/opd/print/${selectedVisit.appointmentId}`,
+                    "_blank"
+                  )
+                }
               >
-                Collect OPD Bill <ExternalLink className="h-3 w-3" />
-              </Link>
+                <Printer className="h-3.5 w-3.5 mr-1.5 text-violet-600" /> Print OPD Slip
+              </Button>
             </div>
           )}
 
@@ -191,6 +273,7 @@ function CasualtyBillingContent() {
             }
             billingType="CASUALTY"
             linkedEntityId={selectedVisit?.id}
+            linkedAppointmentId={selectedVisit?.appointmentId || undefined}
             pendingBillNumber={selectedVisit?.pendingBillNumber}
             preselectedPatient={
               selectedVisit
@@ -205,7 +288,10 @@ function CasualtyBillingContent() {
             prefilledItems={getPrefilledItems()}
             showPatientSearch={!selectedVisit}
             onSubmit={async (data) => {
-              const result = await createBill(data)
+              const result = await createBill({
+                ...data,
+                linkedAppointmentId: selectedVisit?.appointmentId || undefined,
+              })
               if (result.success) {
                 setVisits((prev) => prev.filter((v) => v.id !== selectedVisit?.id))
                 setSelectedVisit(null)
@@ -216,6 +302,8 @@ function CasualtyBillingContent() {
             title={
               selectedVisit?.hasPendingBill
                 ? `Casualty Bill (${selectedVisit.pendingBillNumber})`
+                : selectedVisit?.hasOpdConsultation
+                ? `Casualty & OPD Consolidated Bill`
                 : "Casualty Billing"
             }
           />

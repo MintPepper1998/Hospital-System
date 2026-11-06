@@ -21,6 +21,21 @@ export interface RadiologyParameterSectionResult {
   parameters: RadiologyParameterResult[]
 }
 
+export interface RadiologyOrganFinding {
+  id?: string
+  organ: string
+  description: string
+}
+
+export interface RadiologyTemplateData {
+  studyTitle?: string
+  modality?: string
+  organs: RadiologyOrganFinding[]
+  additionalObservations?: string
+  defaultImpression?: string
+  footerNote?: string
+}
+
 export interface RadiologyAttachment {
   url: string
   title?: string
@@ -30,6 +45,10 @@ export interface RadiologyAttachment {
 export interface RadiologyReportData {
   modality: string
   studyArea: string
+  studyTitle?: string
+  organs?: RadiologyOrganFinding[]
+  additionalObservations?: string
+  footerNote?: string
   sections?: RadiologyParameterSectionResult[]
   parameters: RadiologyParameterResult[]
   interpretation: string
@@ -83,25 +102,25 @@ export async function getRadiologyEntryContext(requestId: string) {
     // 2. Try IPD LabRequest if not found
     const ipdRequest = !opdRequest
       ? await prisma.iPDLabRequest.findUnique({
-          where: { id: requestId },
-          include: {
-            admission: {
-              include: {
-                patient: { include: { user: true } },
-                primaryDoctor: { include: { user: true } },
-                bed: { include: { ward: true } },
-              },
+        where: { id: requestId },
+        include: {
+          admission: {
+            include: {
+              patient: { include: { user: true } },
+              primaryDoctor: { include: { user: true } },
+              bed: { include: { ward: true } },
             },
-            emergencyVisit: {
-              include: {
-                patient: { include: { user: true } },
-                assignedDoctor: { include: { user: true } },
-                bed: { include: { ward: true } },
-              },
-            },
-            testCatalog: true,
           },
-        })
+          emergencyVisit: {
+            include: {
+              patient: { include: { user: true } },
+              assignedDoctor: { include: { user: true } },
+              bed: { include: { ward: true } },
+            },
+          },
+          testCatalog: true,
+        },
+      })
       : null
 
     if (!opdRequest && !ipdRequest) {
@@ -151,12 +170,12 @@ export async function getRadiologyEntryContext(requestId: string) {
 
     const referringDoctor = isIPD
       ? ipdRequest!.orderedByName ||
-        ipdRequest!.admission?.primaryDoctor?.user?.name ||
-        ipdRequest!.emergencyVisit?.assignedDoctor?.user?.name ||
-        "Dr. SELF"
+      ipdRequest!.admission?.primaryDoctor?.user?.name ||
+      ipdRequest!.emergencyVisit?.assignedDoctor?.user?.name ||
+      "Dr. SELF"
       : opdRequest!.appointment?.doctor?.user?.name
-      ? `Dr. ${opdRequest!.appointment.doctor.user.name}`
-      : "Dr. SELF"
+        ? `Dr. ${opdRequest!.appointment.doctor.user.name}`
+        : "Dr. SELF"
 
     // Parse catalog parameters
     const catalogParamsRaw = catalog?.parameters as Record<string, unknown> | null
@@ -185,13 +204,13 @@ export async function getRadiologyEntryContext(requestId: string) {
           heading: (s.heading as string) || "",
           parameters: Array.isArray(s.parameters)
             ? (s.parameters as Array<Record<string, unknown>>).map((p) => ({
-                name: (p.name as string) || "",
-                result: (p.defaultResult as string) || "",
-                unit: (p.unit as string) || "",
-                normalRange: (p.normalRange as string) || "",
-                method: (p.method as string) || "",
-                isAbnormal: false,
-              }))
+              name: (p.name as string) || "",
+              result: (p.defaultResult as string) || "",
+              unit: (p.unit as string) || "",
+              normalRange: (p.normalRange as string) || "",
+              method: (p.method as string) || "",
+              isAbnormal: false,
+            }))
             : [],
         }))
 
@@ -215,6 +234,8 @@ export async function getRadiologyEntryContext(requestId: string) {
       ? (ipdRequest!.parameterResults as Record<string, unknown> | null)
       : (opdRequest!.parameterResults as Record<string, unknown> | null)
 
+    const radiologyTemplate = catalogParamsRaw?.radiologyTemplate as RadiologyTemplateData | undefined
+
     let existingData: RadiologyReportData | null = null
 
     if (savedParameterResults && typeof savedParameterResults === "object") {
@@ -222,11 +243,16 @@ export async function getRadiologyEntryContext(requestId: string) {
       if (
         "interpretation" in savedParameterResults ||
         "parameters" in savedParameterResults ||
-        "modality" in savedParameterResults
+        "modality" in savedParameterResults ||
+        "organs" in savedParameterResults
       ) {
         existingData = {
           modality: (savedParameterResults.modality as string) || defaultModality,
           studyArea: (savedParameterResults.studyArea as string) || defaultStudyArea,
+          studyTitle: (savedParameterResults.studyTitle as string) || radiologyTemplate?.studyTitle || testName,
+          organs: (savedParameterResults.organs as RadiologyOrganFinding[]) || radiologyTemplate?.organs || undefined,
+          additionalObservations: (savedParameterResults.additionalObservations as string) || radiologyTemplate?.additionalObservations || "",
+          footerNote: (savedParameterResults.footerNote as string) || radiologyTemplate?.footerNote || "",
           sections: (savedParameterResults.sections as RadiologyParameterSectionResult[]) || defaultSections,
           parameters: (savedParameterResults.parameters as RadiologyParameterResult[]) || defaultParameters,
           interpretation:
@@ -236,6 +262,7 @@ export async function getRadiologyEntryContext(requestId: string) {
           impression:
             (savedParameterResults.impression as string) ||
             (isIPD ? "" : opdRequest!.impression || "") ||
+            radiologyTemplate?.defaultImpression ||
             "",
           diagramUrl:
             (savedParameterResults.diagramUrl as string) ||
@@ -252,6 +279,26 @@ export async function getRadiologyEntryContext(requestId: string) {
             (savedParameterResults.radiologist as RadiologyReportData["radiologist"]) ||
             DEFAULT_RADIOLOGIST,
         }
+      }
+    }
+
+    if (!existingData && radiologyTemplate && radiologyTemplate.organs && radiologyTemplate.organs.length > 0) {
+      existingData = {
+        modality: radiologyTemplate.modality || defaultModality,
+        studyArea: defaultStudyArea,
+        studyTitle: radiologyTemplate.studyTitle || testName,
+        organs: radiologyTemplate.organs,
+        additionalObservations: radiologyTemplate.additionalObservations || "",
+        footerNote: radiologyTemplate.footerNote || "",
+        sections: defaultSections,
+        parameters: defaultParameters,
+        interpretation: defaultInterpretation,
+        impression: radiologyTemplate.defaultImpression || "",
+        diagramUrl: defaultDiagramUrl,
+        imageUrl: defaultImageUrl,
+        imagePosition: defaultImagePosition,
+        attachments: [],
+        radiologist: DEFAULT_RADIOLOGIST,
       }
     }
 
@@ -282,6 +329,9 @@ IMPRESSION:
           address: hospital?.address || "CHANDAPUR , PANIKOILI , JAJPUR , ODISHA , 755043",
           phone: hospital?.phone || "+919777919827",
           email: hospital?.email || "radiology@shreekamal.com",
+          logoUrl: hospital?.logoUrl || "/images/shreekamal-logo.png",
+          whatsappBusinessNumber: hospital?.whatsappBusinessNumber || hospital?.phone || "+919777919827",
+          pathologistSignature: hospital?.pathologistSignature || null,
         },
         defaultRadiologist: DEFAULT_RADIOLOGIST,
         catalog: {
@@ -296,6 +346,7 @@ IMPRESSION:
           defaultDiagramUrl,
           defaultImageUrl,
           defaultImagePosition,
+          radiologyTemplate: radiologyTemplate || null,
         },
         existingData,
       },

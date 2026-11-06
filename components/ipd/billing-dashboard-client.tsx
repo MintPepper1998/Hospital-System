@@ -1111,6 +1111,8 @@ export function BillingDashboardClient({ admissions, nurses }: { admissions: any
                   type="date"
                   required
                   value={chargeDate}
+                  min={selectedAdmission?.admissionDate ? new Date(selectedAdmission.admissionDate).toISOString().split("T")[0] : undefined}
+                  max={new Date().toISOString().split("T")[0]}
                   onChange={(e) => setChargeDate(e.target.value)}
                   className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-black focus:border-black"
                 />

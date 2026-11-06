@@ -169,6 +169,7 @@ export async function processDischarge(
   admissionId: string,
   options?: {
     dischargeType?: "NORMAL" | "DAMA" | "LAMA" | "TRANSFER" | "REFERRED" | "DEATH" | "ABSCONDED"
+    dischargeDate?: string | Date
     summary?: string
     preparedBy?: string
     paymentMode?: string
@@ -239,9 +240,22 @@ export async function processDischarge(
 
     const now = new Date()
     const admissionDate = new Date(admission.admissionDate)
+    const effectiveDischargeDate = options?.dischargeDate ? new Date(options.dischargeDate) : now
+
+    if (isNaN(effectiveDischargeDate.getTime())) {
+      return { success: false, message: "Invalid discharge date provided." }
+    }
+
+    if (effectiveDischargeDate < admissionDate) {
+      return {
+        success: false,
+        message: `Discharge date (${format(effectiveDischargeDate, "dd MMM yyyy, hh:mm a")}) cannot be earlier than admission date (${format(admissionDate, "dd MMM yyyy, hh:mm a")}).`,
+      }
+    }
+
     const daysAdmitted = Math.max(
       1,
-      Math.ceil((now.getTime() - admissionDate.getTime()) / (1000 * 60 * 60 * 24))
+      Math.ceil((effectiveDischargeDate.getTime() - admissionDate.getTime()) / (1000 * 60 * 60 * 24))
     )
 
     // ── Auto-close/return any active equipment usages for this admission ──
@@ -253,7 +267,7 @@ export async function processDischarge(
       await prisma.iPDEquipmentUsage.update({
         where: { id: eq.id },
         data: {
-          endTime: now,
+          endTime: effectiveDischargeDate,
           status: "RETURNED",
         },
       })
@@ -265,7 +279,7 @@ export async function processDischarge(
     })
 
     // ── Step 2: Calculate current financial position ──
-    const billResult = await calculateFinalBill(admission.id)
+    const billResult = await calculateFinalBill(admission.id, { asOfDate: effectiveDischargeDate })
     if (!billResult.success || !billResult.data) {
       return { success: false, message: billResult.message || "Failed to calculate bill" }
     }
@@ -340,7 +354,7 @@ export async function processDischarge(
         where: { id: admissionId },
         data: {
           status: "DISCHARGED",
-          dischargeDate: now,
+          dischargeDate: effectiveDischargeDate,
           dischargeType: dischargeType as DischargeType,
           dischargeSummary: summary || null,
           totalBedCharges,
@@ -357,7 +371,8 @@ export async function processDischarge(
       const discharge = await tx.discharge.create({
         data: {
           admissionId,
-          dischargeDate: now,
+          dischargeDate: effectiveDischargeDate,
+          createdAt: effectiveDischargeDate,
           type: dischargeType as DischargeType,
           summary: summary || null,
           preparedBy: preparedBy || null,
@@ -447,7 +462,8 @@ export async function processDischarge(
           billNumber,
           patientId: admission.patientId,
           type: "IPD",
-          billDate: now,
+          billDate: effectiveDischargeDate,
+          createdAt: effectiveDischargeDate,
           totalAmount: subtotal,
           discountAmount: additionalDiscount,
           taxAmount: pharmacyTax,
@@ -484,6 +500,8 @@ export async function processDischarge(
             paymentMethod: "INSURANCE",
             referenceId: dischargeBill.id,
             description: `BSKY Government Receivable — Bill #${billNumber} — ${admission.patient.user.name || "Patient"}`,
+            date: effectiveDischargeDate,
+            createdAt: effectiveDischargeDate,
           },
         })
 
@@ -505,6 +523,8 @@ export async function processDischarge(
               paymentMethod: paymentMode,
               referenceId: dischargeBill.id,
               description: `IPD settlement — Bill #${billNumber} — ${admission.patient.user.name || "Patient"}`,
+              date: effectiveDischargeDate,
+              createdAt: effectiveDischargeDate,
             },
           })
 
@@ -533,7 +553,7 @@ export async function processDischarge(
                 gstAmount: 0,
                 totalAmount: bed.total,
                 serviceCategory: "ROOM_RENT",
-                serviceDate: bed.date ? new Date(bed.date) : now,
+                serviceDate: bed.date ? new Date(bed.date) : effectiveDischargeDate,
               },
             })
           )
@@ -551,7 +571,7 @@ export async function processDischarge(
               gstAmount: 0,
               totalAmount: totalBedCharges,
               serviceCategory: "ROOM_RENT",
-              serviceDate: now,
+              serviceDate: effectiveDischargeDate,
             },
           })
         )
@@ -572,7 +592,7 @@ export async function processDischarge(
                 gstAmount: 0,
                 totalAmount: doc.fee,
                 serviceCategory: "CONSULTATION",
-                serviceDate: doc.date ? new Date(doc.date) : now,
+                serviceDate: doc.date ? new Date(doc.date) : effectiveDischargeDate,
                 performedBy: doc.doctorName || `Dr. ${admission.primaryDoctor.user.name || "Doctor"}`,
               },
             })
@@ -592,7 +612,7 @@ export async function processDischarge(
               totalAmount: doctorFees,
               serviceCategory: "CONSULTATION",
               performedBy: `Dr. ${admission.primaryDoctor.user.name || "Doctor"}`,
-              serviceDate: now,
+              serviceDate: effectiveDischargeDate,
             },
           })
         )
@@ -613,7 +633,7 @@ export async function processDischarge(
                 gstAmount: 0,
                 totalAmount: na.totalCost,
                 serviceCategory: "NURSING",
-                serviceDate: na.date ? new Date(na.date) : now,
+                serviceDate: na.date ? new Date(na.date) : effectiveDischargeDate,
               },
             })
           )
@@ -635,7 +655,7 @@ export async function processDischarge(
                 gstAmount: 0,
                 totalAmount: eq.totalCharge,
                 serviceCategory: "EQUIPMENT",
-                serviceDate: eq.date ? new Date(eq.date) : now,
+                serviceDate: eq.date ? new Date(eq.date) : effectiveDischargeDate,
               },
             })
           )
@@ -657,7 +677,7 @@ export async function processDischarge(
                 gstAmount: 0,
                 totalAmount: c.totalAmount,
                 serviceCategory: "OTHER",
-                serviceDate: c.date ? new Date(c.date) : now,
+                serviceDate: c.date ? new Date(c.date) : effectiveDischargeDate,
               },
             })
           )
@@ -679,7 +699,7 @@ export async function processDischarge(
                 gstAmount: 0,
                 totalAmount: surg.charge,
                 serviceCategory: "SURGERY",
-                serviceDate: surg.date ? new Date(surg.date) : now,
+                serviceDate: surg.date ? new Date(surg.date) : effectiveDischargeDate,
                 performedBy: surg.surgeonName,
               },
             })
@@ -725,7 +745,7 @@ export async function processDischarge(
               gstAmount: 0,
               totalAmount: lab.price,
               serviceCategory: "LABORATORY",
-              serviceDate: (lab as any).date ? new Date((lab as any).date) : now,
+              serviceDate: (lab as any).date ? new Date((lab as any).date) : effectiveDischargeDate,
             },
           })
         )
@@ -784,7 +804,7 @@ export async function processDischarge(
               gstAmount: 0,
               totalAmount: med.totalPrice,
               serviceCategory: "PHARMACY",
-              serviceDate: (med as any).date ? new Date((med as any).date) : now,
+              serviceDate: (med as any).date ? new Date((med as any).date) : effectiveDischargeDate,
             },
           })
         )
@@ -850,7 +870,7 @@ export async function processDischarge(
       sendDischargeNotification({
         phone: patientPhone,
         patientName: admission.patient.user.name || "Patient",
-        dischargeDate: format(new Date(), "dd MMM yyyy"),
+        dischargeDate: format(effectiveDischargeDate, "dd MMM yyyy"),
         diagnosis: admission.diagnosis || summary || "As discussed with doctor",
         followUpDate: "As advised by doctor",
         medications: "As per discharge prescription",
@@ -892,7 +912,10 @@ export async function processDischarge(
  * Returns the bill status and insurance info so the UI can
  * show the appropriate warning or confirm button.
  */
-export async function checkDischargeEligibility(admissionId: string) {
+export async function checkDischargeEligibility(
+  admissionId: string,
+  options?: { asOfDate?: string | Date }
+) {
   await requireAuth()
 
   try {
@@ -930,7 +953,7 @@ export async function checkDischargeEligibility(admissionId: string) {
     }
 
     // Calculate financials using calculateFinalBill
-    const billResult = await calculateFinalBill(admission.id)
+    const billResult = await calculateFinalBill(admission.id, { asOfDate: options?.asOfDate })
     if (!billResult.success || !billResult.data) {
       return { success: false, message: billResult.message || "Failed to calculate bill", data: null }
     }

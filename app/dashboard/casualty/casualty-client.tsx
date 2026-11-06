@@ -20,6 +20,7 @@ import {
   Bandage,
   Wind,
   Search,
+  Microscope,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -27,6 +28,7 @@ import { Input } from "@/components/ui/input"
 import { CasualtyAdmitModal } from "./casualty-admit-modal"
 import { AddProcedureModal } from "./add-procedure-modal"
 import { BookOPDModal } from "./book-opd-modal"
+import { OrderDiagnosticsModal } from "./order-diagnostics-modal"
 import { dischargeCasualty } from "@/app/actions/casualty"
 import { PrintOPDButton } from "@/components/print-opd-button"
 
@@ -129,6 +131,8 @@ const categoryIcons: Record<string, string> = {
   SPLINT: "🩼",
   GENERAL: "⚕️",
   OTHER: "🔧",
+  PATHOLOGY: "🧪",
+  RADIOLOGY: "🔬",
 }
 
 // ──────────────────────────────────────────────────
@@ -149,6 +153,7 @@ export function CasualtyClient({
   const [showAdmitModal, setShowAdmitModal] = useState(false)
   const [procedureModalVisit, setProcedureModalVisit] = useState<SerializedVisit | null>(null)
   const [opdModalVisit, setOPDModalVisit] = useState<SerializedVisit | null>(null)
+  const [diagnosticsModalVisit, setDiagnosticsModalVisit] = useState<SerializedVisit | null>(null)
   const [dischargingId, setDischargingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -264,6 +269,7 @@ export function CasualtyClient({
               visit={visit}
               onAddProcedure={() => setProcedureModalVisit(visit)}
               onBookOPD={() => setOPDModalVisit(visit)}
+              onOrderDiagnostics={() => setDiagnosticsModalVisit(visit)}
               onDischarge={() => handleDischarge(visit.id)}
               isDischarging={dischargingId === visit.id}
             />
@@ -293,6 +299,14 @@ export function CasualtyClient({
           onClose={() => { setOPDModalVisit(null); startTransition(() => router.refresh()) }}
           visit={opdModalVisit}
           doctors={doctors}
+        />
+      )}
+
+      {diagnosticsModalVisit && (
+        <OrderDiagnosticsModal
+          isOpen={!!diagnosticsModalVisit}
+          onClose={() => { setDiagnosticsModalVisit(null); startTransition(() => router.refresh()) }}
+          visit={diagnosticsModalVisit}
         />
       )}
     </>
@@ -329,12 +343,14 @@ function PatientCard({
   visit,
   onAddProcedure,
   onBookOPD,
+  onOrderDiagnostics,
   onDischarge,
   isDischarging,
 }: {
   visit: SerializedVisit
   onAddProcedure: () => void
   onBookOPD: () => void
+  onOrderDiagnostics: () => void
   onDischarge: () => void
   isDischarging: boolean
 }) {
@@ -432,6 +448,12 @@ function PatientCard({
           className="neo-button bg-[#e0e5ec] rounded-xl px-3 py-1.5 text-[11px] font-semibold text-zinc-700 flex items-center gap-1.5 hover:bg-[#d5dae2] transition-colors"
         >
           <FileText className="h-3.5 w-3.5 text-violet-500" /> Book OPD
+        </button>
+        <button
+          onClick={onOrderDiagnostics}
+          className="neo-button bg-[#e0e5ec] rounded-xl px-3 py-1.5 text-[11px] font-semibold text-zinc-700 flex items-center gap-1.5 hover:bg-[#d5dae2] transition-colors"
+        >
+          <Microscope className="h-3.5 w-3.5 text-teal-600" /> Lab / Tests
         </button>
         <button
           onClick={onDischarge}

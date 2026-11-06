@@ -82,13 +82,16 @@ export default async function PrintBillPage(props: {
             <Row label="Patient Name" value={b.patientName} />
             <Row label="Patient ID" value={b.patientId} />
             <Row label="Admission Date" value={format(new Date(b.admissionDate), "dd MMM yyyy, hh:mm a")} />
+            {b.dischargeDate && (
+              <Row label="Discharge Date" value={format(new Date(b.dischargeDate), "dd MMM yyyy, hh:mm a")} />
+            )}
             <Row label="Days Admitted" value={`${b.daysAdmitted} day(s)`} />
           </div>
           <div className="space-y-2">
             <Row label="Ward" value={`${b.wardName} (${b.wardType})`} />
             <Row label="Bed" value={b.bedNumber} />
             <Row label="Primary Doctor" value={`Dr. ${b.doctorName}`} />
-            <Row label="Invoice Date" value={format(new Date(), "dd MMM yyyy")} />
+            <Row label="Invoice Date" value={b.dischargeDate ? format(new Date(b.dischargeDate), "dd MMM yyyy") : format(new Date(), "dd MMM yyyy")} />
           </div>
         </div>
 

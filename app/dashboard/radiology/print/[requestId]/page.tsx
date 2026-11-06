@@ -2,9 +2,8 @@ import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
 import Image from "next/image"
 import { format, differenceInYears } from "date-fns"
-import { QrCode, Radiation } from "lucide-react"
 import { RadiologyReportPrintActions } from "@/components/radiology/report-print-actions"
-import { RadiologyReportData } from "@/app/actions/radiology"
+import type { RadiologyReportData, RadiologyOrganFinding } from "@/app/actions/radiology"
 
 export const dynamic = "force-dynamic"
 
@@ -85,7 +84,9 @@ export default async function RadiologyReportPrintPage({ params }: RadiologyRepo
 
   const patientName = patientRaw?.user?.name || "Patient"
   const patientId = patientRaw?.patientId || "N/A"
-  const gender = patientRaw?.gender || "OTHER"
+  const rawGender = (patientRaw?.gender || "OTHER").toUpperCase()
+  const genderDisplay = rawGender === "MALE" ? "Male" : rawGender === "FEMALE" ? "Female" : rawGender
+
   const patientAge = patientRaw?.dateOfBirth
     ? differenceInYears(new Date(), new Date(patientRaw.dateOfBirth))
     : null
@@ -99,14 +100,6 @@ export default async function RadiologyReportPrintPage({ params }: RadiologyRepo
     ? `Dr. ${opdRequest!.appointment.doctor.user.name}`
     : "Dr. SELF"
 
-  const bedInfo = isIPD
-    ? ipdRequest!.admission?.bed
-      ? `${ipdRequest!.admission.bed.ward.name} / Bed ${ipdRequest!.admission.bed.bedNumber}`
-      : ipdRequest!.emergencyVisit?.bed
-      ? `Emergency / Bed ${ipdRequest!.emergencyVisit.bed.bedNumber}`
-      : "IPD Inpatient"
-    : "OPD Walk-in"
-
   // 4. Parse Structured Report Data from parameterResults
   const rawParamResults = isIPD
     ? (ipdRequest!.parameterResults as Record<string, unknown> | null)
@@ -115,7 +108,10 @@ export default async function RadiologyReportPrintPage({ params }: RadiologyRepo
   const isStructured =
     rawParamResults &&
     typeof rawParamResults === "object" &&
-    ("interpretation" in rawParamResults || "parameters" in rawParamResults || "modality" in rawParamResults)
+    ("interpretation" in rawParamResults ||
+      "parameters" in rawParamResults ||
+      "modality" in rawParamResults ||
+      "organs" in rawParamResults)
 
   const structuredData = isStructured
     ? (rawParamResults as unknown as RadiologyReportData)
@@ -127,23 +123,37 @@ export default async function RadiologyReportPrintPage({ params }: RadiologyRepo
     impression: opdRequest!.impression,
   }
 
-  const modality = structuredData?.modality || "ULTRASOUND"
-  const studyArea = structuredData?.studyArea || testName
-  const parameters = structuredData?.parameters || []
-  const interpretationText = structuredData?.interpretation || legacyContent.reportContent || "No findings entered."
+  const studyTitle = structuredData?.studyTitle || testName
+  const organs: RadiologyOrganFinding[] = structuredData?.organs || []
+  const additionalObservations = structuredData?.additionalObservations || ""
+  const interpretationText = structuredData?.interpretation || legacyContent.reportContent || ""
   const impressionText = structuredData?.impression || legacyContent.impression || ""
+  const footerNote =
+    structuredData?.footerNote ||
+    `जाँच केवल ${hospital?.name || "श्री कमल अस्पताल"} परिसर की ही मान्य होगी।`
+
   const attachments = structuredData?.attachments || []
   const diagramUrl = structuredData?.imageUrl || structuredData?.diagramUrl
   const imagePosition = structuredData?.imagePosition || "end"
+  const parameters = structuredData?.parameters || []
 
   const signingDoctor = structuredData?.radiologist || {
-    name: opdRequest?.performedBy || "Dr. Monika Panda",
-    qualification: "MD Radiodiagnosis",
-    designation: "Head of the Department & Consultant Radiologist",
-    regNo: "48921/OMC",
+    name: opdRequest?.performedBy || "Dr. S. Prakash",
+    qualification: "M.B.B.S., M.D. (Radio)",
+    designation: "Consultant Radiologist",
+    regNo: "13082",
   }
 
-  const reportSID = `RAD-${format(new Date(createdAt), "yyyyMMdd")}-${requestId.slice(-5).toUpperCase()}`
+  // Lab / Report No
+  const labNumber = isIPD
+    ? ipdRequest!.id.slice(-4).toUpperCase()
+    : opdRequest!.id.slice(-4).toUpperCase()
+
+  const hospitalName = hospital?.name || "SHREE KAMAL HOSPITAL"
+  const hospitalAddress = hospital?.address || "CHANDAPUR , PANIKOILI , JAJPUR , ODISHA , 755043"
+  const hospitalTel = hospital?.phone || "91-5275-263082, 263092"
+  const hospitalMob = hospital?.whatsappBusinessNumber || hospital?.phone || "9369125406"
+  const hospitalLogo = hospital?.logoUrl || "/images/shreekamal-logo.png"
 
   return (
     <div className="min-h-screen bg-slate-100 py-6 print:bg-white print:py-0 print:min-h-0 text-slate-900 font-sans">
@@ -152,154 +162,143 @@ export default async function RadiologyReportPrintPage({ params }: RadiologyRepo
         <RadiologyReportPrintActions requestId={requestId} />
       </div>
 
-      {/* ── Printable A4 Sheet Matching Medclin Lab Spec ── */}
+      {/* ── Printable A4 Sheet Matching Uploaded Template Exactly ── */}
       <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none print:max-w-none print:w-full print:m-0">
         <div
           id="radiology-report-print"
-          className="border-2 border-black p-5 sm:p-6 print:p-5 flex flex-col justify-between min-h-[285mm] print:min-h-[275mm]"
+          className="p-8 sm:p-10 print:p-8 flex flex-col justify-between min-h-[297mm] print:min-h-[285mm] text-slate-900"
         >
           <div>
-            {/* ── 1. Hospital Header ── */}
-            <div className="flex items-center justify-between pb-3 border-b-2 border-black">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full border-2 border-black flex items-center justify-center bg-slate-50 text-slate-900">
-                  <Radiation className="h-7 w-7 text-purple-700" />
+            {/* ── 1. Top Header: Logo + Hindi Tagline (Left), Hospital Name & Details (Right) ── */}
+            <div className="flex items-start justify-between pb-2">
+              {/* Left: Logo & Sanskrit Tagline */}
+              <div className="flex flex-col items-center">
+                <div className="relative h-20 w-24">
+                  <Image
+                    src={hospitalLogo}
+                    alt={hospitalName}
+                    fill
+                    unoptimized
+                    className="object-contain"
+                    priority
+                  />
                 </div>
-                <div>
-                  <h1 className="text-xl font-black uppercase tracking-tight text-slate-950 font-serif">
-                    {hospital?.name || "SHREE KAMAL HOSPITAL"}
-                  </h1>
-                  <p className="text-[10px] text-slate-600 font-medium">
-                    (A Unit of Shree Kamal Healthcare Private Limited)
-                  </p>
-                  <p className="text-[10px] text-slate-600 font-medium leading-tight">
-                    {hospital?.address || "CHANDAPUR, PANIKOILI, JAJPUR, ODISHA, 755043"}
-                  </p>
-                  <p className="text-[9px] text-slate-500 font-mono mt-0.5">
-                    Phone: {hospital?.phone || "+91 97779 19827"} | Email: {hospital?.email || "radiology@shreekamal.com"}
-                  </p>
+                <div className="text-[12px] font-bold text-slate-800 tracking-wider mt-1 font-sans">
+                  ।। ज्योतिर्गमय ।।
                 </div>
               </div>
 
-              <div className="text-right">
-                <div className="border border-black px-2.5 py-1 bg-slate-50 inline-block text-right">
-                  <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                    ACCREDITED IMAGING CENTRE
+              {/* Right: Hospital Name, Address, Tel, Mob */}
+              <div className="text-right space-y-0.5 max-w-md">
+                <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-emerald-800 font-sans">
+                  {hospitalName}
+                </h1>
+                <p className="text-xs font-semibold text-slate-800 leading-snug">
+                  {hospitalAddress}
+                </p>
+                <p className="text-xs font-medium text-slate-900">
+                  Tel. : {hospitalTel}
+                </p>
+                <p className="text-xs font-medium text-slate-900">
+                  Mob.: {hospitalMob}
+                </p>
+              </div>
+            </div>
+
+            {/* Horizontal Line below Header */}
+            <hr className="border-t border-black my-2" />
+
+            {/* ── 2. Patient Demographics Header Block (Exact layout from uploaded image) ── */}
+            <div className="text-xs font-sans py-1 leading-relaxed">
+              {/* Row 1 */}
+              <div className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-5 flex">
+                  <span className="font-bold w-24 shrink-0 text-slate-900">Patient Name</span>
+                  <span className="font-bold uppercase text-slate-950">: {patientName}</span>
+                </div>
+                <div className="col-span-4 flex">
+                  <span className="font-bold w-12 shrink-0 text-slate-900">Date</span>
+                  <span className="font-medium text-slate-950">: {format(new Date(createdAt), "dd/MM/yyyy")}</span>
+                </div>
+                <div className="col-span-3 flex justify-end sm:justify-start">
+                  <span className="font-bold w-16 shrink-0 text-slate-900">Lab No.</span>
+                  <span className="font-mono font-bold text-slate-950">: {labNumber}</span>
+                </div>
+              </div>
+
+              {/* Row 2 */}
+              <div className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-5 flex">
+                  <span className="font-bold w-24 shrink-0 text-slate-900">Sex</span>
+                  <span className="font-medium text-slate-950">: {genderDisplay}</span>
+                </div>
+                <div className="col-span-7 flex">
+                  <span className="font-bold w-12 shrink-0 text-slate-900">Age</span>
+                  <span className="font-medium text-slate-950">
+                    : {patientAge ? `${patientAge} Yr(s)` : "—"}
                   </span>
-                  <span className="block font-mono text-xs font-black text-slate-950">
-                    {reportSID}
-                  </span>
+                </div>
+              </div>
+
+              {/* Row 3 */}
+              <div className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-12 flex">
+                  <span className="font-bold w-24 shrink-0 text-slate-900">Ref By</span>
+                  <span className="font-bold uppercase text-slate-950">: {referringDoctor}</span>
                 </div>
               </div>
             </div>
 
-            {/* ── 2. Department Banner ── */}
-            <div className="bg-black text-white text-center py-1 mt-1 font-bold text-xs uppercase tracking-widest">
-              DEPARTMENT OF RADIODIAGNOSIS &amp; IMAGING — RADIOLOGY TEST REPORT
+            {/* Thick Horizontal Divider Line */}
+            <hr className="border-t-2 border-black my-2.5" />
+
+            {/* ── 3. Centered, Underlined Study Title ── */}
+            <div className="text-center my-3.5">
+              <h2 className="text-sm sm:text-base font-black uppercase tracking-wider underline underline-offset-4 font-sans text-slate-950">
+                {studyTitle}
+              </h2>
             </div>
 
-            {/* ── 3. Two-Column Patient Demographics Table (Medclin Specification) ── */}
-            <div className="border border-black mt-1 text-[11px]">
-              <div className="grid grid-cols-2 divide-x divide-black">
-                {/* Left Column */}
-                <div className="divide-y divide-black/80">
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Patient Name :</span>
-                    <span className="font-bold text-slate-950 uppercase">{patientName}</span>
+            {/* ── 4. Organ-Wise Findings Body (Matches Uploaded Template) ── */}
+            {organs && organs.length > 0 ? (
+              <div className="space-y-3.5 my-4 text-xs leading-relaxed text-slate-900 font-sans">
+                {organs.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-start">
+                    <div className="col-span-3 sm:col-span-2 font-bold uppercase tracking-tight text-slate-950">
+                      {item.organ.trim()}:
+                    </div>
+                    <div className="col-span-9 sm:col-span-10 whitespace-pre-wrap text-slate-900 font-medium">
+                      {item.description}
+                    </div>
                   </div>
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Age / Gender :</span>
-                    <span className="font-medium text-slate-950">
-                      {patientAge ? `${patientAge} Y` : "N/A"} / {gender}
-                    </span>
-                  </div>
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Patient ID (UHID) :</span>
-                    <span className="font-mono font-bold text-slate-950">{patientId}</span>
-                  </div>
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Referred By :</span>
-                    <span className="font-semibold text-slate-950">{referringDoctor}</span>
-                  </div>
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Patient Location :</span>
-                    <span className="font-medium text-slate-950">{bedInfo}</span>
-                  </div>
-                </div>
-
-                {/* Right Column */}
-                <div className="divide-y divide-black/80">
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Report No / SID :</span>
-                    <span className="font-mono font-bold text-slate-950">{reportSID}</span>
-                  </div>
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Registered Date :</span>
-                    <span className="font-mono text-slate-950">
-                      {format(new Date(createdAt), "dd-MMM-yyyy hh:mm a")}
-                    </span>
-                  </div>
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Reported Date :</span>
-                    <span className="font-mono text-slate-950">
-                      {format(new Date(completedAt), "dd-MMM-yyyy hh:mm a")}
-                    </span>
-                  </div>
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Modality / Area :</span>
-                    <span className="font-bold text-slate-950 uppercase">{modality} — {studyArea}</span>
-                  </div>
-                  <div className="p-1.5 flex">
-                    <span className="w-32 shrink-0 font-semibold text-slate-600">Report Status :</span>
-                    <span className="font-bold text-emerald-800 uppercase tracking-wide">
-                      {status === "COMPLETED" ? "FINAL REPORT / VERIFIED" : status}
-                    </span>
-                  </div>
-                </div>
+                ))}
               </div>
-            </div>
-
-            {/* ── 4. Investigation Title Bar ── */}
-            <div className="border-x border-b border-black bg-slate-100/90 px-3 py-1.5 flex justify-between items-center text-xs">
-              <div className="font-bold uppercase tracking-wide text-slate-950">
-                INVESTIGATION : <span className="underline decoration-purple-500 underline-offset-2">{testName}</span>
+            ) : interpretationText ? (
+              /* Fallback for legacy text reports */
+              <div className="my-4 text-xs leading-relaxed text-slate-900 whitespace-pre-wrap font-sans font-medium">
+                {interpretationText}
               </div>
-              <div className="text-[10px] font-mono text-slate-600 uppercase">
-                STUDY : {studyArea}
-              </div>
-            </div>
+            ) : null}
 
-            {/* ── 5. Five-Column Parameters Table (Medclin Specification) ── */}
-            {parameters.length > 0 && (
-              <div className="border-x border-b border-black">
-                <table className="w-full text-[10.5px] border-collapse">
+            {/* Fallback 5-column parameters table if legacy parameters exist without organs */}
+            {organs.length === 0 && parameters.length > 0 && (
+              <div className="border border-black my-4">
+                <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-black bg-slate-50 text-slate-900 font-bold uppercase tracking-wider text-[9.5px]">
-                      <th className="py-1 px-3 text-left w-[24%] border-r border-black/40">Test / Parameter</th>
-                      <th className="py-1 px-3 text-left w-[36%] border-r border-black/40">Results</th>
-                      <th className="py-1 px-2 text-center w-[10%] border-r border-black/40">Units</th>
-                      <th className="py-1 px-3 text-left w-[15%] border-r border-black/40">Bio. Ref. Interval</th>
-                      <th className="py-1 px-3 text-left w-[15%]">Method</th>
+                    <tr className="bg-slate-100 border-b border-black font-bold uppercase text-[10px]">
+                      <th className="py-1 px-3 text-left">Organ / Parameter</th>
+                      <th className="py-1 px-3 text-left">Observation / Finding</th>
+                      <th className="py-1 px-2 text-center">Unit</th>
+                      <th className="py-1 px-3 text-left">Bio. Ref. Range</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {parameters.map((param, index) => (
-                      <tr key={index} className="leading-tight">
-                        <td className="py-1 px-3 font-semibold text-slate-900 border-r border-black/40 uppercase">
-                          {param.name}
-                        </td>
-                        <td className="py-1 px-3 font-mono font-bold text-slate-950 border-r border-black/40">
-                          {param.result || "—"}
-                        </td>
-                        <td className="py-1 px-2 text-center text-slate-700 border-r border-black/40">
-                          {param.unit || "—"}
-                        </td>
-                        <td className="py-1 px-3 text-slate-600 border-r border-black/40 whitespace-pre-line">
-                          {param.normalRange || "—"}
-                        </td>
-                        <td className="py-1 px-3 text-slate-500 font-medium">
-                          {param.method || "Real-time B Mode"}
-                        </td>
+                    {parameters.map((p, i) => (
+                      <tr key={i}>
+                        <td className="py-1 px-3 font-bold uppercase">{p.name}</td>
+                        <td className="py-1 px-3">{p.result}</td>
+                        <td className="py-1 px-2 text-center">{p.unit || "—"}</td>
+                        <td className="py-1 px-3">{p.normalRange || "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -307,182 +306,110 @@ export default async function RadiologyReportPrintPage({ params }: RadiologyRepo
               </div>
             )}
 
-            {/* ── 6. Interpretation & Clinical Findings Section ── */}
-            <div className="border-x border-b border-black p-3.5 space-y-3">
-              <div>
-                <h3 className="font-serif font-bold text-xs uppercase tracking-wider text-slate-950 underline underline-offset-2 mb-1.5">
-                  Interpretation :-
-                </h3>
+            {/* ── 5. Additional Observations Paragraphs ── */}
+            {additionalObservations.trim() && (
+              <div className="my-4 text-xs leading-relaxed space-y-2 text-slate-950 font-bold font-sans">
+                {additionalObservations
+                  .split("\n")
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                  .map((line, i) => (
+                    <p key={i}>{line}</p>
+                  ))}
+              </div>
+            )}
 
-                {/* If image position is START: render images BEFORE findings text */}
-                {imagePosition === "start" && (attachments.length > 0 || diagramUrl) && (
-                  <div className="pb-3 border-b border-black/20 mb-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                      DIAGNOSTIC IMAGING CAPTURES &amp; SCAN FILMS :-
+            {/* ── 6. Bold Uppercase IMPRESSION ── */}
+            {impressionText.trim() && (
+              <div className="my-5 text-xs font-bold leading-normal font-sans text-slate-950">
+                <span className="uppercase tracking-wider mr-2">IMPRESSION:</span>
+                <span className="uppercase font-extrabold">{impressionText}</span>
+              </div>
+            )}
+
+            {/* Scan Film Captures or Diagrams if Attached */}
+            {(attachments.length > 0 || diagramUrl) && (
+              <div className="my-4 pt-3 border-t border-slate-300">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-2">
+                  ATTACHED DIAGNOSTIC SCAN FILMS / CAPTURES:
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {diagramUrl && (
+                    <div className="border border-black/40 p-1 bg-white text-center">
+                      <div className="relative aspect-[4/3] w-full bg-slate-50 overflow-hidden">
+                        <Image
+                          src={diagramUrl}
+                          alt="Diagnostic Diagram"
+                          fill
+                          unoptimized
+                          className="object-contain"
+                        />
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {diagramUrl && (
-                        <div className="border border-black/60 p-1 bg-white text-center space-y-1">
-                          <div className="relative aspect-[4/3] w-full bg-black/5 overflow-hidden">
-                            <Image
-                              src={diagramUrl}
-                              alt="Reference Diagram"
-                              fill
-                              unoptimized
-                              className="object-contain"
-                            />
-                          </div>
-                          <p className="text-[9px] font-semibold text-slate-700 italic">
-                            Reference Anatomical / Sonological Correlation
-                          </p>
-                        </div>
-                      )}
-
-                      {attachments.map((att, idx) => (
-                        <div key={idx} className="border border-black/60 p-1 bg-white text-center space-y-1">
-                          <div className="relative aspect-[4/3] w-full bg-black overflow-hidden">
-                            <Image
-                              src={att.url}
-                              alt={att.caption || `Film ${idx + 1}`}
-                              fill
-                              unoptimized
-                              className="object-contain"
-                            />
-                          </div>
-                          <p className="text-[9px] font-semibold text-slate-800">
-                            {att.caption || `Figure ${idx + 1}: Scan Film Capture`}
-                          </p>
-                        </div>
-                      ))}
+                  )}
+                  {attachments.map((att, idx) => (
+                    <div key={idx} className="border border-black/40 p-1 bg-white text-center">
+                      <div className="relative aspect-[4/3] w-full bg-black overflow-hidden">
+                        <Image
+                          src={att.url}
+                          alt={att.caption || `Film ${idx + 1}`}
+                          fill
+                          unoptimized
+                          className="object-contain"
+                        />
+                      </div>
+                      <p className="text-[9px] font-semibold text-slate-800 mt-1">
+                        {att.caption || `Scan Capture ${idx + 1}`}
+                      </p>
                     </div>
-                  </div>
-                )}
-
-                <div className="text-[11px] leading-relaxed text-slate-900 whitespace-pre-wrap font-sans">
-                  {interpretationText}
+                  ))}
                 </div>
               </div>
-
-              {/* Final Diagnostic Impression Box */}
-              {impressionText.trim() && (
-                <div className="p-2.5 bg-slate-50 border border-black rounded text-[11px]">
-                  <span className="font-bold text-slate-950 uppercase tracking-wider block mb-1">
-                    IMPRESSION :-
-                  </span>
-                  <p className="font-semibold text-slate-950 whitespace-pre-wrap leading-snug">
-                    {impressionText}
-                  </p>
-                </div>
-              )}
-
-              {/* If image position is END (default): render images AFTER impression */}
-              {imagePosition === "end" && (attachments.length > 0 || diagramUrl) && (
-                <div className="pt-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                    DIAGNOSTIC IMAGING CAPTURES &amp; SCAN FILMS :-
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {diagramUrl && (
-                      <div className="border border-black/60 p-1 bg-white text-center space-y-1">
-                        <div className="relative aspect-[4/3] w-full bg-black/5 overflow-hidden">
-                          <Image
-                            src={diagramUrl}
-                            alt="Reference Diagram"
-                            fill
-                            unoptimized
-                            className="object-contain"
-                          />
-                        </div>
-                        <p className="text-[9px] font-semibold text-slate-700 italic">
-                          Reference Anatomical / Sonological Correlation
-                        </p>
-                      </div>
-                    )}
-
-                    {attachments.map((att, idx) => (
-                      <div key={idx} className="border border-black/60 p-1 bg-white text-center space-y-1">
-                        <div className="relative aspect-[4/3] w-full bg-black overflow-hidden">
-                          <Image
-                            src={att.url}
-                            alt={att.caption || `Film ${idx + 1}`}
-                            fill
-                            unoptimized
-                            className="object-contain"
-                          />
-                        </div>
-                        <p className="text-[9px] font-semibold text-slate-800">
-                          {att.caption || `Figure ${idx + 1}: Scan Film Capture`}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
-          {/* ── 7. End of Report & Signatures Section ── */}
-          <div className="mt-4 pt-2 border-t border-black space-y-3">
-            {/* End of Report text */}
-            <div className="text-center">
-              <span className="text-[10px] font-bold tracking-widest uppercase text-slate-900 px-4 py-0.5 bg-slate-100 border border-black/30 inline-block">
-                *** End Of Report ***
-              </span>
-              <p className="text-[9px] text-slate-500 italic mt-0.5">
-                This report has been electronically authenticated and verified. Clinical correlation is recommended.
-              </p>
-            </div>
-
-            {/* QR Code and Consultant Signatures Grid */}
-            <div className="flex items-end justify-between px-2 pt-2">
-              {/* Left: QR Code & Verification */}
-              <div className="flex items-center gap-2">
-                <div className="p-1 border border-black bg-white">
-                  <QrCode className="h-14 w-14 text-slate-950" />
-                </div>
-                <div className="text-[9px] text-slate-600 leading-tight">
-                  <span className="font-bold text-slate-900 block font-mono">{reportSID}</span>
-                  <span>Scan to verify authentic report</span>
-                  <span className="block text-slate-500">
-                    Printed: {format(new Date(), "dd-MMM-yyyy HH:mm:ss")}
-                  </span>
-                </div>
-              </div>
-
-              {/* Right: Signing Radiologist */}
-              <div className="text-right space-y-0.5 min-w-[200px]">
-                <div className="h-10 flex items-end justify-end mb-1">
-                  <span className="font-serif italic text-slate-500 text-xs tracking-wider">
-                    [Digitally Signed]
-                  </span>
-                </div>
-                <div className="border-t border-black pt-1">
-                  <p className="text-xs font-bold text-slate-950 uppercase font-serif">
-                    {signingDoctor.name}
-                  </p>
-                  <p className="text-[10px] text-slate-700 font-medium">
-                    {signingDoctor.qualification}
-                  </p>
-                  <p className="text-[9px] text-slate-600">
-                    {signingDoctor.designation}
-                  </p>
-                  {signingDoctor.regNo && (
-                    <p className="text-[9px] font-mono text-slate-500">
-                      Regd. No: {signingDoctor.regNo}
-                    </p>
+          {/* ── 7. Bottom Section: Doctor Signature (Right) & Footer Disclaimer ── */}
+          <div className="mt-8">
+            {/* Doctor Signature Block on Right */}
+            <div className="flex justify-end mb-4">
+              <div className="text-center min-w-[200px] space-y-0.5">
+                <div className="h-14 flex items-end justify-center mb-1">
+                  {hospital?.pathologistSignature ? (
+                    <div className="relative h-14 w-32">
+                      <Image
+                        src={hospital.pathologistSignature}
+                        alt="Doctor Signature"
+                        fill
+                        unoptimized
+                        className="object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <span className="font-serif italic text-slate-400 text-xs tracking-wider">
+                      [Signature &amp; Stamp]
+                    </span>
                   )}
                 </div>
+                <p className="text-xs font-bold text-slate-950 font-sans">
+                  {signingDoctor.name}
+                </p>
+                <p className="text-[11px] text-slate-700 font-sans">
+                  {signingDoctor.qualification}
+                </p>
+                {signingDoctor.regNo && (
+                  <p className="text-[10px] text-slate-600 font-mono">
+                    Reg. No.-{signingDoctor.regNo}
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Legal Disclaimer & Pagination */}
-            <div className="border-t border-black/60 pt-1 flex justify-between items-center text-[8.5px] text-slate-500">
-              <span className="max-w-[80%] leading-tight">
-                Conditions of Reporting: 1. It is presumed that the scan/investigation belongs to the patient named above. 2. Medical findings must be clinically correlated by the treating physician. 3. Not valid for medico-legal purposes.
-              </span>
-              <span className="font-bold font-mono text-slate-700 shrink-0">
-                Page 1 of 1
-              </span>
+            {/* Thick Bottom Divider Line */}
+            <hr className="border-t-2 border-black my-2" />
+
+            {/* Centered Hindi Disclaimer (matches uploaded image: "जाँच केवल [Hospital Name] परिसर की ही मान्य होगी।") */}
+            <div className="text-center text-xs sm:text-sm font-semibold text-slate-900 font-sans tracking-wide py-1">
+              {footerNote}
             </div>
           </div>
         </div>

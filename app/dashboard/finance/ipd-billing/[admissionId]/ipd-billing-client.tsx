@@ -19,6 +19,10 @@ export function IPDBillingClient({ admission }: { admission: any }) {
 
   // Current main bill
   const currentBill = admission.billings?.find((b: any) => b.status === "PENDING") || admission.billings?.[0]
+  const todayDate = new Date().toISOString().split("T")[0]
+  const minAdmissionDate = admission.admissionDate
+    ? new Date(admission.admissionDate).toISOString().split("T")[0]
+    : undefined
 
   const handleAddCharge = async (formData: FormData) => {
     formData.append("admissionId", admission.id)
@@ -113,6 +117,18 @@ export function IPDBillingClient({ admission }: { admission: any }) {
                 </DialogHeader>
                 <form action={handleAddCharge} className="space-y-4">
                   <div className="space-y-2">
+                    <Label>Charge Date</Label>
+                    <Input
+                      type="date"
+                      name="chargeDate"
+                      defaultValue={todayDate}
+                      min={minAdmissionDate}
+                      max={todayDate}
+                      required
+                    />
+                    <p className="text-[11px] text-muted-foreground">Backdating supported.</p>
+                  </div>
+                  <div className="space-y-2">
                     <Label>Category</Label>
                     <select name="category" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
                       <option value="BED">Bed / Room Charges</option>
@@ -169,6 +185,18 @@ export function IPDBillingClient({ admission }: { admission: any }) {
                   <DialogTitle>Record Payment</DialogTitle>
                 </DialogHeader>
                 <form action={handleAddPayment} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Payment / Collection Date</Label>
+                    <Input
+                      type="date"
+                      name="paymentDate"
+                      defaultValue={todayDate}
+                      min={minAdmissionDate}
+                      max={todayDate}
+                      required
+                    />
+                    <p className="text-[11px] text-muted-foreground">Backdating supported.</p>
+                  </div>
                   <div className="space-y-2">
                     <Label>Payment Method</Label>
                     <select name="paymentMethod" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>

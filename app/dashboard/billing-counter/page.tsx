@@ -37,6 +37,7 @@ export default async function BillingCounterPage() {
     unbilledCasualty: 0,
     unbilledEmergency: 0,
     unbilledSurgeries: 0,
+    unbilledDiagnostics: 0,
   }
 
   const categories = [
@@ -98,7 +99,7 @@ export default async function BillingCounterPage() {
       color: "text-teal-600",
       bg: "bg-teal-50",
       border: "border-l-teal-500",
-      badge: 0,
+      badge: (stats as any).unbilledDiagnostics || 0,
     },
     {
       label: "Ambulance",

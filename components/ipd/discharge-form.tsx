@@ -114,6 +114,13 @@ export function DischargeForm({
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null)
 
+  const toLocalISOString = (d: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, "0")
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  const [dischargeDate, setDischargeDate] = useState<string>(() => toLocalISOString(new Date()))
+  const maxDischargeDate = toLocalISOString(new Date())
+
   const finalBalance = Math.max(0, balanceDue - additionalDiscount)
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -141,6 +148,7 @@ export function DischargeForm({
     startTransition(async () => {
       const result = await processDischarge(admissionId, {
         dischargeType: (dischargeType || "NORMAL") as any,
+        dischargeDate: dischargeDate || undefined,
         summary,
       })
 
@@ -199,39 +207,59 @@ export function DischargeForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-6">
-          {/* Discharge Type */}
-          <div className="space-y-2">
-            <Label htmlFor="dischargeType">
-              Discharge Type <span className="text-red-500">*</span>
-            </Label>
-            <Select name="dischargeType" required value={selectedTypeCode} onValueChange={setSelectedTypeCode}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select discharge type" />
-              </SelectTrigger>
-              <SelectContent>
-                {dischargeTypes.length > 0 ? (
-                  dischargeTypes.map(dt => (
-                    <SelectItem key={dt.code} value={dt.code}>{dt.label}</SelectItem>
-                  ))
-                ) : (
-                  <>
-                    <SelectItem value="NORMAL">Normal Discharge</SelectItem>
-                    <SelectItem value="LAMA">LAMA (Left Against Medical Advice)</SelectItem>
-                    <SelectItem value="ABSCONDED">Absconded</SelectItem>
-                    <SelectItem value="DEATH">Death</SelectItem>
-                    <SelectItem value="REFERRED">Referred to Another Hospital</SelectItem>
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-            {selectedType?.description && (
-              <p className="text-xs text-muted-foreground">{selectedType.description}</p>
-            )}
-            {selectedType?.headerNote && (
-              <div className="bg-amber-50 border border-amber-200 rounded-md p-2 mt-1">
-                <p className="text-xs font-semibold text-amber-800">{selectedType.headerNote}</p>
-              </div>
-            )}
+          {/* Discharge Type & Discharge Date/Time */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="dischargeType">
+                Discharge Type <span className="text-red-500">*</span>
+              </Label>
+              <Select name="dischargeType" required value={selectedTypeCode} onValueChange={setSelectedTypeCode}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select discharge type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dischargeTypes.length > 0 ? (
+                    dischargeTypes.map(dt => (
+                      <SelectItem key={dt.code} value={dt.code}>{dt.label}</SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="NORMAL">Normal Discharge</SelectItem>
+                      <SelectItem value="LAMA">LAMA (Left Against Medical Advice)</SelectItem>
+                      <SelectItem value="ABSCONDED">Absconded</SelectItem>
+                      <SelectItem value="DEATH">Death</SelectItem>
+                      <SelectItem value="REFERRED">Referred to Another Hospital</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              {selectedType?.description && (
+                <p className="text-xs text-muted-foreground">{selectedType.description}</p>
+              )}
+              {selectedType?.headerNote && (
+                <div className="bg-amber-50 border border-amber-200 rounded-md p-2 mt-1">
+                  <p className="text-xs font-semibold text-amber-800">{selectedType.headerNote}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="dischargeDate">
+                Discharge Date & Time <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="dischargeDate"
+                name="dischargeDate"
+                type="datetime-local"
+                value={dischargeDate}
+                max={maxDischargeDate}
+                onChange={(e) => setDischargeDate(e.target.value)}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Backdating supported. Records stay and settlement as of this date.
+              </p>
+            </div>
           </div>
 
           {/* Final Diagnosis */}

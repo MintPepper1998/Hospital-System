@@ -22,12 +22,16 @@ export function ProcessPaymentDialog({
   const [loading, setLoading] = useState(false)
   const [amount, setAmount] = useState<string>(admission?.balanceDue?.toString() || "")
   const [paymentMode, setPaymentMode] = useState("CASH")
+  const [paymentDate, setPaymentDate] = useState<string>(() => new Date().toISOString().split("T")[0])
   const [notes, setNotes] = useState("")
 
   // Split payment state
   const [splitCash, setSplitCash] = useState("")
   const [splitUpi, setSplitUpi] = useState("")
   const [splitCard, setSplitCard] = useState("")
+
+  const minDate = admission?.admissionDate ? new Date(admission.admissionDate).toISOString().split("T")[0] : undefined
+  const maxDate = new Date().toISOString().split("T")[0]
 
   const isSplit = paymentMode === "SPLIT"
   const numAmount = parseFloat(amount) || 0
@@ -63,7 +67,7 @@ export function ProcessPaymentDialog({
         card: parseFloat(splitCard) || 0,
       } : undefined
 
-      const res = await processIpdPayment(admission.id, numAmount, paymentMode, notes, splitPayments)
+      const res = await processIpdPayment(admission.id, numAmount, paymentMode, notes, splitPayments, paymentDate)
       if (res.success) {
         toast.success(`Successfully recorded payment of ₹${numAmount.toFixed(2)}`)
         onSuccess()
@@ -112,6 +116,25 @@ export function ProcessPaymentDialog({
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Payment Date Input */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs uppercase tracking-[0.15em] text-gray-400 font-bold">
+                  Collection / Payment Date
+                </Label>
+                <span className="text-[11px] text-gray-400 font-medium">Backdating Supported</span>
+              </div>
+              <Input
+                type="date"
+                value={paymentDate}
+                min={minDate}
+                max={maxDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className="h-12 bg-gray-50/50 border-gray-200/60 rounded-[1rem] text-sm font-semibold focus-visible:ring-black focus-visible:ring-offset-0 transition-all duration-300"
+                required
+              />
+            </div>
+
             {/* Amount Input */}
             <div className="space-y-3">
               <Label className="text-xs uppercase tracking-[0.15em] text-gray-400 font-bold">

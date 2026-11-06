@@ -11,6 +11,7 @@ export async function createIPDCharge(formData: FormData) {
     const description = formData.get("description") as string
     const amount = parseFloat(formData.get("amount") as string)
     const category = formData.get("category") as string // BED, LAB, PHARMACY, OTHER
+    const chargeDateRaw = formData.get("chargeDate") as string
 
     if (!admissionId || !description || isNaN(amount)) {
       return { success: false, message: "Missing required fields" }
@@ -22,6 +23,17 @@ export async function createIPDCharge(formData: FormData) {
 
     if (!admission) {
       return { success: false, message: "Admission not found" }
+    }
+
+    const effectiveChargeDate = chargeDateRaw ? new Date(chargeDateRaw) : new Date()
+    if (isNaN(effectiveChargeDate.getTime())) {
+      return { success: false, message: "Invalid charge date provided" }
+    }
+    if (effectiveChargeDate < new Date(admission.admissionDate)) {
+      return {
+        success: false,
+        message: `Charge date cannot be earlier than admission date (${new Date(admission.admissionDate).toLocaleDateString("en-IN")})`,
+      }
     }
 
     // Since a Billing is the parent container, we either create one for this charge,
@@ -44,6 +56,8 @@ export async function createIPDCharge(formData: FormData) {
           patientId: admission.patientId,
           ipdAdmissionId: admissionId,
           type: "IPD",
+          billDate: effectiveChargeDate,
+          createdAt: effectiveChargeDate,
           totalAmount: 0,
           netAmount: 0,
           balanceAmount: 0,
@@ -61,6 +75,8 @@ export async function createIPDCharge(formData: FormData) {
         unitPrice: amount,
         amount: amount,
         totalAmount: amount,
+        serviceDate: effectiveChargeDate,
+        createdAt: effectiveChargeDate,
       }
     })
 
@@ -108,9 +124,31 @@ export async function recordIPDPayment(formData: FormData) {
     const amount = parseFloat(formData.get("amount") as string)
     const paymentMethod = formData.get("paymentMethod") as string
     const transactionId = formData.get("transactionId") as string
+    const paymentDateRaw = formData.get("paymentDate") as string
 
     if (!admissionId || !billingId || isNaN(amount)) {
       return { success: false, message: "Missing required fields" }
+    }
+
+    const admission = await prisma.iPDAdmission.findUnique({
+      where: { id: admissionId },
+      include: { patient: { include: { user: true } } },
+    })
+
+    if (!admission) {
+      return { success: false, message: "Admission record not found" }
+    }
+
+    const effectivePaymentDate = paymentDateRaw ? new Date(paymentDateRaw) : new Date()
+    if (isNaN(effectivePaymentDate.getTime())) {
+      return { success: false, message: "Invalid payment date provided" }
+    }
+
+    if (effectivePaymentDate < new Date(admission.admissionDate)) {
+      return {
+        success: false,
+        message: `Payment date cannot be earlier than admission date (${new Date(admission.admissionDate).toLocaleDateString("en-IN")})`,
+      }
     }
 
     await prisma.$transaction(async (tx) => {
@@ -121,7 +159,8 @@ export async function recordIPDPayment(formData: FormData) {
           amount,
           paymentMethod,
           transactionId,
-          paymentDate: new Date(),
+          paymentDate: effectivePaymentDate,
+          createdAt: effectivePaymentDate,
         }
       })
 
@@ -162,9 +201,11 @@ export async function recordIPDPayment(formData: FormData) {
             category: "IPD_PAYMENT",
             paymentMethod,
             referenceId: billingId,
-            description: `IPD payment for admission ${admissionId}`,
+            description: `IPD payment — ${admission.patient?.user?.name || "Patient"} (${admission.patient?.patientId || admissionId})`,
             accountGroupCode,
             billingType: "IPD",
+            date: effectivePaymentDate,
+            createdAt: effectivePaymentDate,
           },
         })
         await tx.financialAccount.update({

@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ChevronUp,
   CreditCard,
+  Microscope,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { AddProcedureModal } from "../../add-procedure-modal"
 import { BookOPDModal } from "../../book-opd-modal"
+import { OrderDiagnosticsModal } from "../../order-diagnostics-modal"
 import { dischargeCasualty, updateCasualtyStatus } from "@/app/actions/casualty"
 
 // ──────────────────────────────────────────────────
@@ -55,6 +57,8 @@ const categoryIcons: Record<string, string> = {
   SPLINT: "🩼",
   GENERAL: "⚕️",
   OTHER: "🔧",
+  PATHOLOGY: "🧪",
+  RADIOLOGY: "🔬",
 }
 
 // ──────────────────────────────────────────────────
@@ -73,6 +77,7 @@ export function CasualtyPatientDetail({ visit, doctors }: CasualtyPatientDetailP
   const [isPending, startTransition] = useTransition()
   const [showProcedureModal, setShowProcedureModal] = useState(false)
   const [showOPDModal, setShowOPDModal] = useState(false)
+  const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false)
   const [dischargingId, setDischargingId] = useState(false)
   const [showProcedures, setShowProcedures] = useState(true)
   const [showBillings, setShowBillings] = useState(true)
@@ -159,6 +164,13 @@ export function CasualtyPatientDetail({ visit, doctors }: CasualtyPatientDetailP
             >
               <FileText className="h-4 w-4 text-violet-500" />
               Book OPD
+            </Button>
+            <Button
+              onClick={() => setShowDiagnosticsModal(true)}
+              className="neo-button bg-[#e0e5ec] text-zinc-800 hover:bg-[#d5dae2] rounded-xl px-4 py-2.5 text-sm font-semibold flex items-center gap-2"
+            >
+              <Microscope className="h-4 w-4 text-teal-600" />
+              Order Diagnostics
             </Button>
             <Button
               onClick={handleDischarge}
@@ -560,6 +572,14 @@ export function CasualtyPatientDetail({ visit, doctors }: CasualtyPatientDetailP
           onClose={() => { setShowOPDModal(false); startTransition(() => router.refresh()) }}
           visit={visit}
           doctors={doctors}
+        />
+      )}
+
+      {showDiagnosticsModal && (
+        <OrderDiagnosticsModal
+          isOpen={showDiagnosticsModal}
+          onClose={() => { setShowDiagnosticsModal(false); startTransition(() => router.refresh()) }}
+          visit={visit}
         />
       )}
     </>

@@ -356,6 +356,8 @@ export async function bookOPDFromCasualty(data: {
   revalidatePath("/dashboard/casualty")
   revalidatePath("/dashboard/clinical/opd")
   revalidatePath("/dashboard/clinical/emr")
+  revalidatePath("/dashboard/billing-counter/casualty")
+  revalidatePath("/dashboard/billing-counter/opd")
   writeAuditLog({
     userId: "system",
     action: "CREATE",

@@ -25,6 +25,7 @@ export interface CreateBillInput {
   patientId: string
   billingType: string // "OPD" | "CASUALTY" | "EMERGENCY" | "OT" | "CUSTOM" etc
   linkedEntityId?: string // appointmentId / casualtyVisitId / emergencyVisitId / surgeryId
+  linkedAppointmentId?: string // optional appointment link for casualty bills with OPD consultation
   items: BillLineItem[]
   discountAmount: number
   discountPercent: number
@@ -184,6 +185,7 @@ export async function createBill(data: CreateBillInput) {
             billing = await tx.billing.update({
               where: { id: existingPendingBill.id },
               data: {
+                ...(data.linkedAppointmentId ? { appointmentId: data.linkedAppointmentId } : {}),
                 totalAmount: subtotal,
                 discountAmount,
                 netAmount,
@@ -213,7 +215,7 @@ export async function createBill(data: CreateBillInput) {
                   })),
                 },
               },
-              include: { items: true, patient: { include: { user: true } } },
+              include: { items: true, patient: { include: { user: true } }, appointment: true },
             })
           }
         } else if (data.billingType === "OPD" && data.linkedEntityId) {
@@ -236,6 +238,7 @@ export async function createBill(data: CreateBillInput) {
             billing = await tx.billing.update({
               where: { id: existingPendingBill.id },
               data: {
+                ...(data.linkedAppointmentId ? { appointmentId: data.linkedAppointmentId } : {}),
                 totalAmount: subtotal,
                 discountAmount,
                 netAmount,
@@ -265,7 +268,7 @@ export async function createBill(data: CreateBillInput) {
                   })),
                 },
               },
-              include: { items: true, patient: { include: { user: true } } },
+              include: { items: true, patient: { include: { user: true } }, appointment: true },
             })
           }
         }
@@ -277,6 +280,9 @@ export async function createBill(data: CreateBillInput) {
               billNumber: candidateBillNumber,
               patientId: data.patientId,
               ...entityLink,
+              ...(data.billingType === "CASUALTY" && data.linkedAppointmentId
+                ? { appointmentId: data.linkedAppointmentId }
+                : {}),
               type: billingTypeEnum,
               billDate: new Date(),
               totalAmount: subtotal,
@@ -309,7 +315,7 @@ export async function createBill(data: CreateBillInput) {
                 })),
               },
             },
-            include: { items: true, patient: { include: { user: true } } },
+            include: { items: true, patient: { include: { user: true } }, appointment: true },
           })
         }
 
@@ -442,7 +448,7 @@ export async function createBill(data: CreateBillInput) {
           })
         }
 
-        // 4. Update linked entity payment status (Surgery / OPD)
+        // 4. Update linked entity payment status (Surgery / OPD / Casualty)
         if (data.billingType === "OT" && data.linkedEntityId) {
           await tx.surgery.update({
             where: { id: data.linkedEntityId },
@@ -463,6 +469,63 @@ export async function createBill(data: CreateBillInput) {
               data: { status: "CONFIRMED" },
             })
           }
+        } else if (data.billingType === "CASUALTY" && data.linkedEntityId) {
+          const apptId = data.linkedAppointmentId || billing.appointmentId
+          if (apptId && !isCredit) {
+            await tx.appointment.update({
+              where: { id: apptId },
+              data: { status: "CONFIRMED" },
+            }).catch(() => {})
+          }
+
+          // Settle or absorb any separate PENDING OPD bill that was previously created for this casualty visit or appointment
+          const existingPendingOpdBill = await tx.billing.findFirst({
+            where: {
+              status: BillingStatus.PENDING,
+              type: BillingType.OPD,
+              OR: [
+                { casualtyVisitId: data.linkedEntityId },
+                ...(apptId ? [{ appointmentId: apptId }] : []),
+              ],
+            },
+          })
+
+          if (existingPendingOpdBill) {
+            await tx.billing.update({
+              where: { id: existingPendingOpdBill.id },
+              data: {
+                status: BillingStatus.PAID,
+                paidAmount: existingPendingOpdBill.netAmount,
+                balanceAmount: 0,
+                notes: `Consolidated and settled in Casualty Bill #${billing.billNumber}`,
+              },
+            })
+
+            await tx.creditEntry.updateMany({
+              where: {
+                referenceId: existingPendingOpdBill.id,
+                referenceType: "BILLING",
+                status: "OPEN",
+              },
+              data: {
+                status: "CLOSED",
+                balanceAmount: 0,
+                paidAmount: existingPendingOpdBill.netAmount,
+              },
+            })
+          }
+
+          // Settle any pending LabRequests for this patient (e.g. from Casualty diagnostics orders)
+          await tx.labRequest.updateMany({
+            where: {
+              patientId: data.patientId,
+              status: "PENDING_PAYMENT",
+            },
+            data: {
+              status: isCredit ? "PENDING_PAYMENT" : "PAID_PENDING_SAMPLE",
+              billingId: billing.id,
+            },
+          })
         }
 
         return billing
@@ -517,6 +580,7 @@ export async function getUnbilledAppointments() {
 
     const appointments = await prisma.appointment.findMany({
       where: {
+        casualtyVisitId: null,
         OR: [
           {
             billings: { none: { type: "OPD" } },
@@ -614,9 +678,28 @@ export async function getUnbilledCasualtyVisits() {
         ],
       },
       include: {
-        patient: { include: { user: true } },
+        patient: {
+          include: {
+            user: true,
+            labRequests: {
+              where: { status: "PENDING_PAYMENT" },
+              orderBy: { createdAt: "desc" },
+            },
+          },
+        },
         assignedDoctor: { include: { user: true } },
         procedures: true,
+        appointments: {
+          include: {
+            doctor: { include: { user: true } },
+            billings: {
+              where: { status: "PENDING" },
+              include: { items: true },
+              orderBy: { createdAt: "desc" },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
         billings: {
           where: { status: "PENDING" },
           include: { items: true },
@@ -631,13 +714,75 @@ export async function getUnbilledCasualtyVisits() {
       success: true,
       data: visits.map((v) => {
         const pendingCasualtyBill = v.billings?.find((b) => b.type === "CASUALTY") || null
-        const pendingOpdBill = v.billings?.find((b) => b.type === "OPD") || null
+        const linkedAppointment = v.appointments?.[0] || null
+        const pendingOpdBill =
+          v.billings?.find((b) => b.type === "OPD") ||
+          linkedAppointment?.billings?.[0] ||
+          null
 
+        const opdDoctorName = linkedAppointment?.doctor?.user?.name || v.assignedDoctor?.user?.name || null
+        const opdConsultationFee = linkedAppointment?.doctor?.consultationFee || 500
+
+        let opdItems: Array<{
+          id?: string
+          description: string
+          quantity: number
+          unitPrice: number
+          serviceCategory: string
+        }> = []
+
+        if (pendingOpdBill && pendingOpdBill.items.length > 0) {
+          opdItems = pendingOpdBill.items.map((i) => ({
+            id: i.id,
+            description: i.description,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+            serviceCategory: i.serviceCategory || "CONSULTATION",
+          }))
+        } else if (linkedAppointment) {
+          opdItems = [
+            {
+              description: `Consultation Fee - Dr. ${opdDoctorName || "Doctor"}`,
+              quantity: 1,
+              unitPrice: opdConsultationFee,
+              serviceCategory: "CONSULTATION",
+            },
+          ]
+        }
+
+        const opdTotal = opdItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
         const procedureTotal = v.procedures.reduce(
           (sum, p) => sum + p.unitPrice * p.quantity,
           0
         )
-        const totalAmount = pendingCasualtyBill ? pendingCasualtyBill.netAmount : procedureTotal
+
+        const pendingLabRequests = v.patient.labRequests || []
+        const diagnosticItems = pendingLabRequests
+          .filter(
+            (lr) =>
+              !v.procedures.some(
+                (p) =>
+                  p.name.toLowerCase() === lr.testName.toLowerCase() ||
+                  lr.testName.toLowerCase().includes(p.name.toLowerCase())
+              )
+          )
+          .map((lr) => ({
+            id: lr.id,
+            description: `${lr.testType === "RADIOLOGY" ? "🔬 Radiology: " : "🧪 Pathology: "}${lr.testName}`,
+            quantity: 1,
+            unitPrice: lr.testPrice,
+            serviceCategory: lr.testType,
+          }))
+
+        const diagnosticTotal = diagnosticItems.reduce(
+          (sum, item) => sum + item.quantity * item.unitPrice,
+          0
+        )
+
+        const casualtyBillHasConsultation = pendingCasualtyBill?.items.some((i) => i.serviceCategory === "CONSULTATION")
+        const totalAmount = pendingCasualtyBill
+          ? pendingCasualtyBill.netAmount + (!casualtyBillHasConsultation ? opdTotal : 0)
+          : procedureTotal + opdTotal + diagnosticTotal
 
         return {
           id: v.id,
@@ -646,7 +791,7 @@ export async function getUnbilledCasualtyVisits() {
           patientDisplayId: v.patient.patientId,
           patientPhone: v.patient.phone,
           chiefComplaint: v.chiefComplaint,
-          doctorName: v.assignedDoctor?.user.name || "Unassigned",
+          doctorName: opdDoctorName || v.assignedDoctor?.user.name || "Unassigned",
           arrivalTime: v.arrivalTime.toISOString(),
           status: v.status,
           hasPendingBill: !!pendingCasualtyBill,
@@ -668,6 +813,14 @@ export async function getUnbilledCasualtyVisits() {
                 appointmentId: pendingOpdBill.appointmentId,
               }
             : null,
+          appointmentId: linkedAppointment?.id || pendingOpdBill?.appointmentId || null,
+          hasOpdConsultation: opdItems.length > 0,
+          opdDoctorName,
+          opdItems,
+          opdTotal,
+          diagnosticItems,
+          diagnosticTotal,
+          hasDiagnostics: diagnosticItems.length > 0,
           procedures: v.procedures.map((p) => ({
             id: p.id,
             name: p.name,
@@ -701,7 +854,15 @@ export async function getUnbilledEmergencyVisits() {
         status: { in: ["TRIAGING", "OBSERVATION", "TREATING"] },
       },
       include: {
-        patient: { include: { user: true } },
+        patient: {
+          include: {
+            user: true,
+            labRequests: {
+              where: { status: "PENDING_PAYMENT" },
+              orderBy: { createdAt: "desc" },
+            },
+          },
+        },
         assignedDoctor: { include: { user: true } },
         bed: { include: { ward: true } },
       },
@@ -870,6 +1031,12 @@ export async function getBillingCounterStats() {
       where: { status: "COMPLETED", paymentStatus: "PENDING", billingId: null },
     })
 
+    const unbilledDiagnostics = await prisma.labRequest.count({
+      where: {
+        status: "PENDING_PAYMENT",
+      },
+    })
+
     return {
       success: true,
       data: {
@@ -881,6 +1048,7 @@ export async function getBillingCounterStats() {
         unbilledCasualty,
         unbilledEmergency,
         unbilledSurgeries,
+        unbilledDiagnostics,
       },
     }
   } catch (error: any) {

@@ -38,7 +38,44 @@ import {
   RadiologyParameterResult,
   RadiologyAttachment,
   RadiologyReportData,
+  RadiologyOrganFinding,
+  RadiologyTemplateData,
 } from "@/app/actions/radiology"
+
+const DEFAULT_WHOLE_ABDOMEN_ORGANS: RadiologyOrganFinding[] = [
+  {
+    organ: "LIVER",
+    description: "Normal in shape, size and parenchymal echotexture. IHBCS are not dilated. Portal vein is normal in caliber. No focal lesion is seen.",
+  },
+  {
+    organ: "G. BLADDER",
+    description: "Normal in size, shape and echopattern. No calculus or mass lesion detected in the gall bladder. G.B. wall thickness is normal.",
+  },
+  {
+    organ: "CBD",
+    description: "is normal in caliber. No calculus or mass lesion is seen.",
+  },
+  {
+    organ: "PANCREAS",
+    description: "Normal in shape, size and echotexture.",
+  },
+  {
+    organ: "SPLEEN",
+    description: "Normal in shape, size and echotexture. No focal lesion is seen.",
+  },
+  {
+    organ: "KIDNEY",
+    description: "B/L kidneys show normal shape, size and echotexture. Cortico-medullary differentiation is maintained. No calculus hydronephrosis is seen.",
+  },
+  {
+    organ: "U. BLADDER",
+    description: "Lumen is echofree. Wall thickness is normal.",
+  },
+  {
+    organ: "PROSTATE",
+    description: "Normal in shape, size and echotexture. No focal lesion is seen.",
+  },
+]
 
 interface ResultEntryStudioProps {
   initialContext: {
@@ -85,6 +122,7 @@ interface ResultEntryStudioProps {
       defaultDiagramUrl: string
       defaultImageUrl?: string
       defaultImagePosition?: "start" | "end"
+      radiologyTemplate?: RadiologyTemplateData | null
     }
     existingData: RadiologyReportData | null
   }
@@ -116,6 +154,34 @@ export function ResultEntryStudio({ initialContext }: ResultEntryStudioProps) {
   )
   const [studyArea, setStudyArea] = useState<string>(
     existingData?.studyArea || catalog.studyArea || testName
+  )
+
+  // ── Organ-Wise Findings State (matches uploaded template) ──
+  const initialOrgans: RadiologyOrganFinding[] =
+    existingData?.organs && existingData.organs.length > 0
+      ? existingData.organs
+      : catalog.radiologyTemplate?.organs && catalog.radiologyTemplate.organs.length > 0
+      ? catalog.radiologyTemplate.organs
+      : DEFAULT_WHOLE_ABDOMEN_ORGANS
+
+  const [studyTitle, setStudyTitle] = useState<string>(
+    existingData?.studyTitle || catalog.radiologyTemplate?.studyTitle || testName
+  )
+
+  const [organs, setOrgans] = useState<RadiologyOrganFinding[]>(initialOrgans)
+
+  const [additionalObservations, setAdditionalObservations] = useState<string>(
+    existingData?.additionalObservations !== undefined
+      ? existingData.additionalObservations
+      : catalog.radiologyTemplate?.additionalObservations !== undefined
+      ? catalog.radiologyTemplate.additionalObservations
+      : "No evidence of retroperitoneal lymphadenopathy is seen.\nGaseous abdomen seen"
+  )
+
+  const [footerNote, setFooterNote] = useState<string>(
+    existingData?.footerNote ||
+      catalog.radiologyTemplate?.footerNote ||
+      "जाँच केवल श्री कमल अस्पताल परिसर की ही मान्य होगी।"
   )
 
   // 5-Column Parameters
@@ -184,8 +250,44 @@ export function ResultEntryStudio({ initialContext }: ResultEntryStudioProps) {
 
   // Impression
   const [impression, setImpression] = useState<string>(
-    existingData?.impression || "No significant sonological / radiological abnormality detected."
+    existingData?.impression ||
+      catalog.radiologyTemplate?.defaultImpression ||
+      "NO SIGNIFICANT SONOLOGICAL ABNORMALITY DETECTED."
   )
+
+  // Organ manipulation helpers
+  const updateOrganFinding = (index: number, description: string) => {
+    setOrgans((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, description } : item))
+    )
+  }
+
+  const updateOrganName = (index: number, organ: string) => {
+    setOrgans((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, organ } : item))
+    )
+  }
+
+  const addOrganFinding = () => {
+    setOrgans((prev) => [...prev, { organ: "", description: "Normal in appearance and echotexture." }])
+  }
+
+  const removeOrganFinding = (index: number) => {
+    setOrgans((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const resetOrganFinding = (index: number) => {
+    const currentName = organs[index].organ.trim().toUpperCase()
+    const catalogOrg = catalog.radiologyTemplate?.organs?.find(
+      (o) => o.organ.trim().toUpperCase() === currentName
+    )
+    const fallbackOrg = DEFAULT_WHOLE_ABDOMEN_ORGANS.find(
+      (o) => o.organ.trim().toUpperCase() === currentName
+    )
+    const normalText = catalogOrg?.description || fallbackOrg?.description || "Normal in size, shape and echotexture."
+    updateOrganFinding(index, normalText)
+    toast.info(`Reset ${organs[index].organ || "organ"} to normal description`)
+  }
 
   // Diagram / Interpretation Image & Position
   const [imageUrl, setImageUrl] = useState<string>(
@@ -324,18 +426,29 @@ export function ResultEntryStudio({ initialContext }: ResultEntryStudioProps) {
 
   // Save report
   const handleSubmit = () => {
-    if (!interpretation.trim()) {
-      return toast.error("Please enter the clinical interpretation or findings")
-    }
     if (!radiologist.name.trim()) {
       return toast.error("Please specify the signing radiologist")
+    }
+
+    const compiledInterpretation = organs
+      .filter((o) => o.organ.trim())
+      .map((o) => `${o.organ.trim().toUpperCase()}:\n${o.description.trim()}`)
+      .join("\n\n") + (additionalObservations.trim() ? `\n\n${additionalObservations.trim()}` : "")
+
+    const finalInterpretation = compiledInterpretation.trim() || interpretation.trim()
+    if (!finalInterpretation) {
+      return toast.error("Please enter the clinical interpretation or findings")
     }
 
     const reportData: RadiologyReportData = {
       modality,
       studyArea,
+      studyTitle: studyTitle.trim() || testName,
+      organs: organs.filter((o) => o.organ.trim()),
+      additionalObservations: additionalObservations.trim(),
+      footerNote: footerNote.trim(),
       parameters: parameters.filter((p) => p.name.trim() || p.result.trim()),
-      interpretation: interpretation.trim(),
+      interpretation: finalInterpretation,
       impression: impression.trim(),
       diagramUrl: imageUrl.trim() || diagramUrl.trim() || undefined,
       imageUrl: imageUrl.trim() || undefined,
@@ -495,7 +608,146 @@ export function ResultEntryStudio({ initialContext }: ResultEntryStudioProps) {
         </CardContent>
       </Card>
 
-      {/* ── 5-Column Parameters & Biological Reference Table (Medclin Format) ── */}
+      {/* ── Organ-Wise Findings Studio (Uploaded Template Standard) ── */}
+      <Card className="border-purple-300 shadow-sm bg-gradient-to-b from-purple-50/20 to-white">
+        <CardHeader className="py-3.5 px-4 bg-purple-50/70 border-b border-purple-200 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-sm font-bold text-purple-950 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-purple-600" />
+              Organ Findings &amp; Clinical Descriptions
+            </CardTitle>
+            <CardDescription className="text-xs text-purple-900/80">
+              Normal findings are pre-filled. Edit the description for any abnormal organ.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addOrganFinding}
+            className="h-8 text-xs border-purple-300 text-purple-700 bg-white hover:bg-purple-50"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" /> Add Organ Finding
+          </Button>
+        </CardHeader>
+        <CardContent className="p-4 space-y-4">
+          {/* Centered Study Title on Print Header */}
+          <div className="space-y-1">
+            <Label htmlFor="studyTitle" className="text-xs font-semibold text-slate-800">
+              Report Study Title (Underlined &amp; Centered on Report)
+            </Label>
+            <Input
+              id="studyTitle"
+              value={studyTitle}
+              onChange={(e) => setStudyTitle(e.target.value)}
+              placeholder="e.g. ULTRASOUND WHOLE ABDOMEN"
+              className="h-8 text-xs font-bold uppercase tracking-wide bg-white"
+            />
+          </div>
+
+          {/* Organs List */}
+          <div className="space-y-3">
+            {organs.map((item, idx) => (
+              <div
+                key={idx}
+                className="border rounded-lg p-3 bg-white shadow-xs space-y-2 border-slate-200 hover:border-purple-300 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold text-purple-700 w-5">
+                      #{idx + 1}
+                    </span>
+                    <Input
+                      value={item.organ}
+                      onChange={(e) => updateOrganName(idx, e.target.value)}
+                      placeholder="ORGAN NAME (e.g. LIVER)"
+                      className="h-7 text-xs font-bold uppercase tracking-tight bg-slate-50 border-slate-300 w-44"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => resetOrganFinding(idx)}
+                      className="h-7 text-[11px] text-slate-600 hover:text-purple-700 hover:bg-purple-50"
+                      title="Reset description to normal baseline"
+                    >
+                      Reset Normal
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeOrganFinding(idx)}
+                      className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      title="Delete organ"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <Textarea
+                    value={item.description}
+                    onChange={(e) => updateOrganFinding(idx, e.target.value)}
+                    placeholder="Describe findings for this organ/region..."
+                    rows={2}
+                    className="text-xs bg-white font-sans resize-y leading-relaxed"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Additional Observations Paragraphs */}
+          <div className="space-y-1.5 pt-2 border-t border-purple-200/60">
+            <Label htmlFor="additionalObservations" className="text-xs font-semibold text-slate-900">
+              Additional Observations Paragraphs (Appears after organ list)
+            </Label>
+            <Textarea
+              id="additionalObservations"
+              value={additionalObservations}
+              onChange={(e) => setAdditionalObservations(e.target.value)}
+              placeholder={"e.g. No evidence of retroperitoneal lymphadenopathy is seen.\nGaseous abdomen seen"}
+              rows={2}
+              className="text-xs bg-white font-sans resize-y"
+            />
+          </div>
+
+          {/* Bold Impression */}
+          <div className="space-y-1.5">
+            <Label htmlFor="impression" className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+              Diagnostic Impression (Bold uppercase on report)
+            </Label>
+            <Textarea
+              id="impression"
+              value={impression}
+              onChange={(e) => setImpression(e.target.value)}
+              placeholder="e.g. ALTERED HEPATIC PARECHYMAL ECHOTEXTURE WITH GB WALL EDEMA....S/O? HEPATITIS."
+              rows={2}
+              className="text-xs bg-white font-bold uppercase tracking-tight text-slate-950 border-purple-300 focus-visible:ring-purple-500"
+            />
+          </div>
+
+          {/* Footer Note */}
+          <div className="space-y-1.5">
+            <Label htmlFor="footerNote" className="text-xs font-semibold text-slate-800">
+              Report Bottom Disclaimer
+            </Label>
+            <Input
+              id="footerNote"
+              value={footerNote}
+              onChange={(e) => setFooterNote(e.target.value)}
+              placeholder="e.g. जाँच केवल श्री कमल अस्पताल परिसर की ही मान्य होगी।"
+              className="h-8 text-xs bg-white"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── 5-Column Parameters & Biological Reference Table (Optional / Collapsible) ── */}
       <Card className="border-slate-200 shadow-sm">
         <CardHeader className="py-3.5 px-4 bg-slate-50/70 border-b border-slate-200 flex flex-row items-center justify-between">
           <div>

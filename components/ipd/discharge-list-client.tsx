@@ -119,6 +119,12 @@ export function DischargeListClient({ patients }: Props) {
   const [showDialog, setShowDialog] = useState(false)
   const [dischargeSuccess, setDischargeSuccess] = useState(false)
 
+  const toLocalISOString = (d: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, "0")
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  const [dischargeDate, setDischargeDate] = useState<string>(() => toLocalISOString(new Date()))
+
   // ── Filter patients ──
   const filtered = patients.filter((p) => {
     const matchesSearch =
@@ -136,6 +142,7 @@ export function DischargeListClient({ patients }: Props) {
   // ── Handle discharge click ──
   function handleDischargeClick(patient: PatientRow) {
     setSelectedPatient(patient)
+    setDischargeDate(toLocalISOString(new Date()))
     setDischargeSuccess(false)
     setShowDialog(true)
   }
@@ -147,6 +154,7 @@ export function DischargeListClient({ patients }: Props) {
     startTransition(async () => {
       const result = await processDischarge(selectedPatient.id, {
         dischargeType: "NORMAL",
+        dischargeDate: dischargeDate || undefined,
         summary: `Discharged from ${selectedPatient.wardName} - ${selectedPatient.bedNumber}`,
       })
 
@@ -364,6 +372,27 @@ export function DischargeListClient({ patients }: Props) {
                       {selectedPatient.daysAdmitted !== 1 ? "s" : ""}
                     </p>
                   </div>
+                </div>
+
+                {/* Backdated Discharge Date Selection */}
+                <div className="space-y-1.5 p-3 bg-indigo-50/60 border border-indigo-100 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-indigo-900 uppercase tracking-wide">
+                      Discharge Date & Time
+                    </label>
+                    <span className="text-[11px] text-indigo-600 font-medium">Backdating Supported</span>
+                  </div>
+                  <Input
+                    type="datetime-local"
+                    value={dischargeDate}
+                    min={selectedPatient ? toLocalISOString(new Date(selectedPatient.admissionDate)) : undefined}
+                    max={toLocalISOString(new Date())}
+                    onChange={(e) => setDischargeDate(e.target.value)}
+                    className="h-10 text-sm font-semibold bg-white"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Bed charges and stay duration are finalized up to this date & time.
+                  </p>
                 </div>
 
                 <Separator />

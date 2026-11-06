@@ -102,6 +102,7 @@ export function AddonsSection({ admissionId, customCharges, total }: AddonsSecti
                 <Input 
                   type="date"
                   value={chargeDate}
+                  max={new Date().toISOString().split("T")[0]}
                   onChange={(e) => setChargeDate(e.target.value)}
                 />
               </div>

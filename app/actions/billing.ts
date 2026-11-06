@@ -83,6 +83,7 @@ export interface BillBreakdown {
   isBsky: boolean
   // Payment history
   payments: { amount: number; mode: string; date: string; notes: string | null }[]
+  dischargeDate?: string | null
 }
 
 // ============================================
@@ -101,7 +102,7 @@ export interface BillBreakdown {
  */
 export async function calculateFinalBill(
   admissionId: string,
-  options?: { doctorFeePerDay?: number }
+  options?: { doctorFeePerDay?: number; asOfDate?: string | Date }
 ): Promise<{ success: boolean; message: string; data: BillBreakdown | null }> {
   const authResult = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT", "RECEPTIONIST", "DOCTOR", "NURSE"])
   if (!authResult.ok) return { success: false, message: authResult.error, data: null }
@@ -147,9 +148,11 @@ export async function calculateFinalBill(
       return { success: false, message: "Admission not found", data: null }
     }
 
-    // ── Calculate days admitted (informational reference only) ──
+    // ── Calculate days admitted (respects backdated asOfDate or dischargeDate) ──
     const admissionDate = new Date(admission.admissionDate)
-    const endDate = admission.dischargeDate ? new Date(admission.dischargeDate) : new Date()
+    const endDate = options?.asOfDate
+      ? new Date(options.asOfDate)
+      : (admission.dischargeDate ? new Date(admission.dischargeDate) : new Date())
     const daysAdmitted = Math.max(
       1,
       Math.ceil((endDate.getTime() - admissionDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -682,6 +685,7 @@ export async function calculateFinalBill(
         patientLiability,
         isBsky: admission.patient.isBsky,
         payments,
+        dischargeDate: admission.dischargeDate ? admission.dischargeDate.toISOString() : (options?.asOfDate ? new Date(options.asOfDate).toISOString() : null),
       },
     }
   } catch (error: any) {
@@ -718,7 +722,8 @@ export async function processIpdPayment(
   amount: number,
   paymentMode: string,
   notes?: string,
-  splitPayments?: { cash?: number; upi?: number; card?: number }
+  splitPayments?: { cash?: number; upi?: number; card?: number },
+  paymentDate?: string | Date
 ) {
   const authResult = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT", "RECEPTIONIST"])
   if (!authResult.ok) return { success: false, message: authResult.error }
@@ -749,6 +754,24 @@ export async function processIpdPayment(
       return { success: false, message: "Admission not found" }
     }
 
+    // Determine effective payment date and validate against patient's admission date
+    const admissionDate = new Date(admission.admissionDate)
+    let effectivePaymentDate = new Date()
+    if (paymentDate) {
+      const parsed = new Date(paymentDate)
+      if (!isNaN(parsed.getTime())) {
+        const admissionDayStart = new Date(admissionDate)
+        admissionDayStart.setHours(0, 0, 0, 0)
+        if (parsed < admissionDayStart) {
+          return {
+            success: false,
+            message: `Payment date (${parsed.toLocaleDateString("en-IN")}) cannot be earlier than patient's admission date (${admissionDate.toLocaleDateString("en-IN")}).`
+          }
+        }
+        effectivePaymentDate = parsed
+      }
+    }
+
     // Wrap in a transaction to ensure data integrity
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create the billing record
@@ -760,7 +783,8 @@ export async function processIpdPayment(
           ipdAdmissionId: admissionId,
           type: "IPD",
           status: "PAID",
-          billDate: new Date(),
+          billDate: effectivePaymentDate,
+          createdAt: effectivePaymentDate,
           totalAmount: amount,
           discountAmount: 0,
           netAmount: amount,
@@ -780,22 +804,15 @@ export async function processIpdPayment(
       // 2. Update admission amountPaid and balanceDue
       const newAmountPaid = (admission.amountPaid || 0) + amount
       
-      // Calculate new balance due using the live bill calculator (or just simple subtraction)
-      // For simplicity, we just deduct from current balanceDue, but calculateFinalBill handles it better.
-      // We will do a live recalc
-      
       const updatedAdmission = await tx.iPDAdmission.update({
         where: { id: admissionId },
         data: {
           amountPaid: newAmountPaid,
-          // note: balanceDue will be recalculated when the page loads, but let's update it here too
           balanceDue: Math.max(0, (admission.balanceDue || 0) - amount),
-          // We can also store this as an initial deposit if they haven't paid anything before, 
-          // but amountPaid is the standard accumulator.
         },
       })
 
-      // 3. Log event
+      // 3. Log event with accurate payment date
       const splitDescription = isSplit && splitPayments
         ? `Split (Cash: ₹${(splitPayments.cash || 0).toFixed(2)}, UPI: ₹${(splitPayments.upi || 0).toFixed(2)}, Card: ₹${(splitPayments.card || 0).toFixed(2)})`
         : paymentMode
@@ -803,12 +820,13 @@ export async function processIpdPayment(
         data: {
           admissionId,
           title: "Payment Received",
-          description: `₹${amount.toFixed(2)} paid via ${splitDescription}. ${notes ? `Notes: ${notes}` : ""}`,
+          description: `₹${amount.toFixed(2)} paid via ${splitDescription} (Date: ${effectivePaymentDate.toLocaleDateString("en-IN")}). ${notes ? `Notes: ${notes}` : ""}`,
           type: "GENERAL",
+          timestamp: effectivePaymentDate,
         }
       })
 
-      // 4. Create ledger transaction(s) + update account balance(s)
+      // 4. Create ledger transaction(s) + update account balance(s) with effective backdate
       if (isSplit && splitPayments) {
         // For split payments, create separate ledger entries per method
         const splits: Array<[string, number]> = [
@@ -832,6 +850,8 @@ export async function processIpdPayment(
                   description: `IPD payment (split ${method}) for admission ${admissionId} - ${billNumber}`,
                   accountGroupCode,
                   billingType: "IPD",
+                  date: effectivePaymentDate,
+                  createdAt: effectivePaymentDate,
                 },
               })
               await tx.financialAccount.update({
@@ -857,6 +877,8 @@ export async function processIpdPayment(
               description: `IPD payment for admission ${admissionId} - ${billNumber}`,
               accountGroupCode,
               billingType: "IPD",
+              date: effectivePaymentDate,
+              createdAt: effectivePaymentDate,
             },
           })
           await tx.financialAccount.update({
@@ -990,6 +1012,22 @@ export async function addCustomCharge(data: {
 
     const totalAmount = Math.max(0, totalBeforeDiscount - discountValue)
     const chargeDate = data.date ? new Date(data.date) : new Date()
+
+    const admission = await prisma.iPDAdmission.findUnique({
+      where: { id: data.admissionId },
+      select: { admissionDate: true },
+    })
+
+    if (admission) {
+      const admissionDayStart = new Date(admission.admissionDate)
+      admissionDayStart.setHours(0, 0, 0, 0)
+      if (chargeDate < admissionDayStart) {
+        return {
+          success: false,
+          message: `Charge date (${chargeDate.toLocaleDateString("en-IN")}) cannot be earlier than patient's admission date (${admission.admissionDate.toLocaleDateString("en-IN")}).`
+        }
+      }
+    }
 
     const charge = await prisma.iPDCustomCharge.create({
       data: {

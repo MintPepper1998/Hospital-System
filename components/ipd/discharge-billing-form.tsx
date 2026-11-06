@@ -121,6 +121,22 @@ export function DischargeBillingForm({
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null)
 
+  const toLocalISOString = (d: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, "0")
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const [dischargeDate, setDischargeDate] = useState<string>(() => toLocalISOString(new Date()))
+  const minDischargeDate = admissionDate ? toLocalISOString(new Date(admissionDate)) : undefined
+  const maxDischargeDate = toLocalISOString(new Date())
+
+  const calculatedDays = Math.max(
+    1,
+    Math.ceil(
+      (new Date(dischargeDate).getTime() - new Date(admissionDate).getTime()) / (1000 * 60 * 60 * 24)
+    )
+  )
+
   // Use balanceDue (which accounts for insurance) instead of raw netPayable
   const effectivePayable = hasInsuranceCoverage && insuranceCoveredAmount > 0
     ? balanceDue  // Already accounts for insurance + deposit
@@ -164,6 +180,7 @@ export function DischargeBillingForm({
     startTransition(async () => {
       const result = await processDischarge(admissionId, {
         dischargeType: (dischargeType || "NORMAL") as any,
+        dischargeDate: dischargeDate || undefined,
         summary,
         paymentMode,
         additionalDiscount,
@@ -210,39 +227,65 @@ export function DischargeBillingForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Discharge Type */}
-          <div className="space-y-2">
-            <Label htmlFor="dischargeType">
-              Discharge Type <span className="text-red-500">*</span>
-            </Label>
-            <Select name="dischargeType" required value={selectedTypeCode} onValueChange={setSelectedTypeCode}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select discharge type" />
-              </SelectTrigger>
-              <SelectContent>
-                {dischargeTypes.length > 0 ? (
-                  dischargeTypes.map(dt => (
-                    <SelectItem key={dt.code} value={dt.code}>{dt.label}</SelectItem>
-                  ))
-                ) : (
-                  <>
-                    <SelectItem value="NORMAL">Normal Discharge</SelectItem>
-                    <SelectItem value="LAMA">LAMA (Left Against Medical Advice)</SelectItem>
-                    <SelectItem value="ABSCONDED">Absconded</SelectItem>
-                    <SelectItem value="DEATH">Death</SelectItem>
-                    <SelectItem value="REFERRED">Referred to Another Hospital</SelectItem>
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-            {selectedType?.description && (
-              <p className="text-xs text-muted-foreground">{selectedType.description}</p>
-            )}
-            {selectedType?.headerNote && (
-              <div className="bg-amber-50 border border-amber-200 rounded-md p-2 mt-1">
-                <p className="text-xs font-semibold text-amber-800">{selectedType.headerNote}</p>
+          {/* Discharge Type & Date/Time Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="dischargeType">
+                Discharge Type <span className="text-red-500">*</span>
+              </Label>
+              <Select name="dischargeType" required value={selectedTypeCode} onValueChange={setSelectedTypeCode}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select discharge type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dischargeTypes.length > 0 ? (
+                    dischargeTypes.map(dt => (
+                      <SelectItem key={dt.code} value={dt.code}>{dt.label}</SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="NORMAL">Normal Discharge</SelectItem>
+                      <SelectItem value="LAMA">LAMA (Left Against Medical Advice)</SelectItem>
+                      <SelectItem value="ABSCONDED">Absconded</SelectItem>
+                      <SelectItem value="DEATH">Death</SelectItem>
+                      <SelectItem value="REFERRED">Referred to Another Hospital</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              {selectedType?.description && (
+                <p className="text-xs text-muted-foreground">{selectedType.description}</p>
+              )}
+              {selectedType?.headerNote && (
+                <div className="bg-amber-50 border border-amber-200 rounded-md p-2 mt-1">
+                  <p className="text-xs font-semibold text-amber-800">{selectedType.headerNote}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="dischargeDate">
+                  Discharge Date & Time <span className="text-red-500">*</span>
+                </Label>
+                <span className="text-xs text-indigo-700 bg-indigo-50 font-semibold px-2 py-0.5 rounded-full">
+                  Stay: {isNaN(calculatedDays) ? daysAdmitted : calculatedDays} day{calculatedDays === 1 ? "" : "s"}
+                </span>
               </div>
-            )}
+              <Input
+                id="dischargeDate"
+                name="dischargeDate"
+                type="datetime-local"
+                value={dischargeDate}
+                min={minDischargeDate}
+                max={maxDischargeDate}
+                onChange={(e) => setDischargeDate(e.target.value)}
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Backdating supported. Minimum date: {admissionDate ? new Date(admissionDate).toLocaleDateString("en-IN") : "Admission Date"}.
+              </p>
+            </div>
           </div>
 
           {selectedType?.templateSections && selectedType.templateSections.length > 0 ? (

@@ -2152,7 +2152,7 @@ export async function createLabTest(data: {
   description: string | null
   isActive: boolean
   type?: "PATHOLOGY" | "RADIOLOGY"
-  parameters?: { name: string; unit: string; normalRange: string }[] | null
+  parameters?: any
 }) {
   const authResult = await requireAuthSafe(["SUPER_ADMIN"])
   if (!authResult.ok) return { success: false, message: authResult.error }
@@ -2227,7 +2227,7 @@ export async function updateLabTest(
     description: string | null
     isActive: boolean
     type?: "PATHOLOGY" | "RADIOLOGY"
-    parameters?: { name: string; unit: string; normalRange: string }[] | null
+    parameters?: any
   }
 ) {
   const authResult = await requireAuthSafe(["SUPER_ADMIN"])
@@ -2300,7 +2300,7 @@ export async function upsertLabTest(data: {
   normalRange: string | null
   description: string | null
   isActive: boolean
-  parameters?: { name: string; unit: string; normalRange: string }[] | null
+  parameters?: any
 }) {
   const authResult = await requireAuthSafe(["SUPER_ADMIN"])
   if (!authResult.ok) return { success: false, message: authResult.error }

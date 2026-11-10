@@ -523,7 +523,7 @@ export async function consolidateHospitalAccounts(): Promise<{ success: boolean;
             isActive: true,
           },
         })
-        await tx.financialAccount.updateMany({ where: { id: { in: duplicateIds } }, data: { isActive: false } })
+        await tx.financialAccount.updateMany({ where: { id: { in: duplicateIds } }, data: { isActive: false, currentBalance: 0 } })
       }
     })
 

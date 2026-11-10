@@ -28,6 +28,7 @@ import {
   IndianRupee,
   ClipboardCheck,
   AlertTriangle,
+  Receipt,
   HelpCircle,
 } from "lucide-react"
 import Link from "next/link"
@@ -112,11 +113,11 @@ const quickActions = [
     description: "Create staff profile"
   },
   {
-    title: "View Expenses",
-    icon: CreditCard,
-    href: "/dashboard/finance/billing",
+    title: "Billing Counter",
+    icon: Receipt,
+    href: "/dashboard/billing-counter",
     gradient: "from-orange-500 to-orange-600",
-    description: "Financial overview"
+    description: "Counter billing & invoices"
   }
 ]
 

@@ -49,7 +49,7 @@ export default async function DashboardPage() {
     case "PATIENT":
       redirect("/dashboard/patient-portal")
     case "ACCOUNTANT":
-      redirect("/dashboard/finance/billing")
+      redirect("/dashboard/billing-counter")
     case "LAB_TECHNICIAN":
       redirect("/dashboard/lab/queue")
     case "CANTEEN_STAFF":

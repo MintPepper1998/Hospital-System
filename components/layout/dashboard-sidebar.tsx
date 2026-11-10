@@ -376,7 +376,10 @@ export function DashboardSidebar({ userRole, userName, userEmail, hospitalLogoUr
   const pathname = usePathname()
 
   // Filter nav groups based on user role and permissions
-  const visibleGroups = navGroups.map(group => {
+  // Note: "Finance" section is explicitly hidden from all users per requirements
+  const visibleGroups = navGroups
+    .filter(group => group.label !== "Finance")
+    .map(group => {
     // Determine if the parent group is accessible
     let isParentAccessible = false
     

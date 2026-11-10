@@ -10,7 +10,7 @@ function getRoleRedirect(role?: string): string {
   switch (role) {
     case "DOCTOR": return "/dashboard/clinical/opd"
     case "PHARMACIST": return "/dashboard/pharmacy/pos"
-    case "ACCOUNTANT": return "/dashboard/finance/billing"
+    case "ACCOUNTANT": return "/dashboard/billing-counter"
     case "LAB_TECHNICIAN": return "/dashboard/lab/queue"
     case "NURSE": return "/dashboard"
     case "PATIENT": return "/dashboard/patient-portal"

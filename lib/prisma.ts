@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client"
 import "@/lib/env" // Validate environment variables on first import
+import { attachLocalSyncExtension } from "@/lib/db-local/prisma-hook"
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -11,12 +12,19 @@ function createPrismaClient(): PrismaClient {
   // RDS free tier default is 80-100 connections; we keep pool small per instance.
   const isProduction = process.env.NODE_ENV === "production"
 
-  return new PrismaClient({
+  const baseClient = new PrismaClient({
     datasourceUrl: isProduction
       ? appendConnectionParams(process.env.DATABASE_URL || "")
       : process.env.DATABASE_URL,
     log: isProduction ? ["error"] : ["error", "warn"],
   })
+
+  // Automatically save database data locally whenever new data is entered or updated
+  if (process.env.DISABLE_LOCAL_DB_SYNC !== "true") {
+    return attachLocalSyncExtension(baseClient) as PrismaClient
+  }
+
+  return baseClient
 }
 
 /**

@@ -25,7 +25,10 @@ export default async function LabQueuePage() {
   const opdPendingCollection = await prisma.labRequest.findMany({
     where: {
       testType: "PATHOLOGY",
-      status: "PAID_PENDING_SAMPLE",
+      OR: [
+        { status: "PAID_PENDING_SAMPLE" },
+        { status: "PENDING_PAYMENT", billingId: { not: null } },
+      ],
     },
     include: {
       patient: {
@@ -184,7 +187,7 @@ export default async function LabQueuePage() {
         : "Direct Order",
       priority: req.priority,
       isUrgent: req.priority === "STAT" || req.priority === "URGENT",
-      billStatus: `Bill: ${req.billing?.billNumber || "N/A"}`,
+      billStatus: `Bill: ${req.billing?.billNumber || "N/A"}${req.billing?.paymentMethod === "CREDIT" ? " (Credit)" : ""}`,
       billTime: req.billing?.billDate
         ? format(new Date(req.billing.billDate), "hh:mm a")
         : null,

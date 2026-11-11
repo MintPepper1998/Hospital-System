@@ -9,11 +9,14 @@ import { CollectSampleButton } from "@/components/lab/collect-sample-button"
 import { EnterResultButton } from "@/components/lab/enter-result-button"
 
 export default async function LaboratoryPage() {
-  // Fetch lab requests for Sample Collection Queue (PAID_PENDING_SAMPLE)
-  // Note: Only showing PAID tests to enforce pre-payment rule
+  // Fetch lab requests for Sample Collection Queue (PAID_PENDING_SAMPLE or billed)
+  // Note: Only showing PAID or billed tests to enforce billing rule
   const sampleQueue = await prisma.labRequest.findMany({
     where: {
-      status: 'PAID_PENDING_SAMPLE',
+      OR: [
+        { status: 'PAID_PENDING_SAMPLE' },
+        { status: 'PENDING_PAYMENT', billingId: { not: null } },
+      ],
     },
     include: {
       patient: {

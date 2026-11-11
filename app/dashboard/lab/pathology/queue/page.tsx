@@ -36,7 +36,10 @@ export default async function PathologyQueuePage({ searchParams }: PathologyQueu
   const opdQueue = await prisma.labRequest.findMany({
     where: {
       testType: "PATHOLOGY",
-      status: "PAID_PENDING_SAMPLE",
+      OR: [
+        { status: "PAID_PENDING_SAMPLE" },
+        { status: "PENDING_PAYMENT", billingId: { not: null } },
+      ],
     },
     include: {
       patient: {

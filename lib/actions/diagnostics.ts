@@ -625,7 +625,7 @@ export async function createDiagnosticBill(data: CreateDiagnosticBillInput) {
             patientId: data.patientId,
           },
           data: {
-            status: isCredit ? "PENDING_PAYMENT" : "PAID_PENDING_SAMPLE",
+            status: "PAID_PENDING_SAMPLE",
             billingId: billing.id,
           },
         })
@@ -648,8 +648,8 @@ export async function createDiagnosticBill(data: CreateDiagnosticBillInput) {
               testCatalogId: test.catalogId || "CUSTOM",
               testName: test.name,
               testPrice: test.unitPrice,
-              testType: test.type,
-              status: isCredit ? "PENDING_PAYMENT" : "PAID_PENDING_SAMPLE",
+              testType: test.type || "PATHOLOGY",
+              status: "PAID_PENDING_SAMPLE",
               billingId: billing.id,
               priority: "ROUTINE",
               notes: data.casualtyVisitId
@@ -689,10 +689,13 @@ export async function createDiagnosticBill(data: CreateDiagnosticBillInput) {
     revalidatePath("/dashboard/billing/diagnostics")
     revalidatePath("/dashboard/billing-counter/casualty")
     revalidatePath("/dashboard/casualty")
+    revalidatePath("/dashboard/lab/queue")
     revalidatePath("/dashboard/lab/pathology/queue")
     revalidatePath("/dashboard/lab/radiology/queue")
+    revalidatePath("/dashboard/radiology/queue")
     revalidatePath("/dashboard/laboratory")
     revalidatePath("/dashboard/finance/billing")
+    revalidatePath("/dashboard/finance")
 
     writeAuditLog({
       userId: authResult.session.user.id,

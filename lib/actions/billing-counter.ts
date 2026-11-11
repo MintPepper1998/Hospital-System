@@ -522,7 +522,7 @@ export async function createBill(data: CreateBillInput) {
               status: "PENDING_PAYMENT",
             },
             data: {
-              status: isCredit ? "PENDING_PAYMENT" : "PAID_PENDING_SAMPLE",
+              status: "PAID_PENDING_SAMPLE",
               billingId: billing.id,
             },
           })
@@ -537,6 +537,9 @@ export async function createBill(data: CreateBillInput) {
     revalidatePath("/dashboard/billing-counter/opd")
     revalidatePath("/dashboard/billing-counter/casualty")
     revalidatePath("/dashboard/casualty")
+    revalidatePath("/dashboard/lab/queue")
+    revalidatePath("/dashboard/lab/pathology/queue")
+    revalidatePath("/dashboard/laboratory")
     revalidatePath("/dashboard/clinical/opd")
     revalidatePath("/dashboard/clinical/emr")
     revalidatePath("/dashboard/finance/billing")

@@ -31,11 +31,14 @@ export default async function RadiologyQueuePage({ searchParams }: RadiologyQueu
   const filter = params?.filter || "ALL"
   const technicianFilter = params?.technician || "ALL"
 
-  // ── OPD: Fetch PAID radiology tests ready for imaging (status = PAID_PENDING_SAMPLE) ──
+  // ── OPD: Fetch PAID radiology tests ready for imaging (status = PAID_PENDING_SAMPLE or billed) ──
   const radiologyQueueRaw = await prisma.labRequest.findMany({
     where: {
       testType: "RADIOLOGY",
-      status: "PAID_PENDING_SAMPLE",
+      OR: [
+        { status: "PAID_PENDING_SAMPLE" },
+        { status: "PENDING_PAYMENT", billingId: { not: null } },
+      ],
     },
     include: {
       patient: {

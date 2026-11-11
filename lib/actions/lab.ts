@@ -168,7 +168,12 @@ export async function saveLabResult(data: {
       return { success: false, message: "This request has already been completed" }
     }
 
-    if (request.status !== "SAMPLE_COLLECTED" && request.status !== "PAID_PENDING_SAMPLE") {
+    const isBilledOrCollected =
+      request.status === "SAMPLE_COLLECTED" ||
+      request.status === "PAID_PENDING_SAMPLE" ||
+      (request.status === "PENDING_PAYMENT" && !!request.billingId)
+
+    if (!isBilledOrCollected) {
       return {
         success: false,
         message: `Cannot enter results for request with status: ${request.status}`,

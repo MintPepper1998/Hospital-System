@@ -24,7 +24,10 @@ export default async function RadiologyQueuePage() {
   const opdQueue = await prisma.labRequest.findMany({
     where: {
       testType: "RADIOLOGY",
-      status: "PAID_PENDING_SAMPLE",
+      OR: [
+        { status: "PAID_PENDING_SAMPLE" },
+        { status: "PENDING_PAYMENT", billingId: { not: null } },
+      ],
     },
     include: {
       patient: {

@@ -1837,11 +1837,12 @@ export async function collectSample(requestId: string) {
       }
     }
 
-    if (request.status !== 'PAID_PENDING_SAMPLE') {
+    const isBilled = request.status === 'PAID_PENDING_SAMPLE' || !!request.billingId
+    if (!isBilled) {
       return {
         success: false,
         error: true,
-        message: `Cannot collect sample. Current status: ${request.status}`,
+        message: `Cannot collect sample. Test has not been billed yet. Current status: ${request.status}`,
       }
     }
 
@@ -2594,6 +2595,8 @@ export async function createSmartInvoice(data: {
     // Revalidate all relevant pages
     revalidatePath("/dashboard/finance/billing")
     revalidatePath("/dashboard/laboratory")
+    revalidatePath("/dashboard/lab/queue")
+    revalidatePath("/dashboard/lab/pathology/queue")
     revalidatePath("/dashboard/pharmacy/inventory")
     revalidatePath("/dashboard/finance")
     revalidatePath("/dashboard/master-finance")

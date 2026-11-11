@@ -10,6 +10,27 @@ import { Prisma } from "@prisma/client"
 // PAYROLL — Salary Processing & Payroll Journal
 // ═══════════════════════════════════════════════════════════════════
 
+function parseDisbursementDate(dateInput?: string | Date): Date {
+  if (!dateInput) return new Date()
+  if (dateInput instanceof Date) return isNaN(dateInput.getTime()) ? new Date() : dateInput
+
+  if (typeof dateInput === "string") {
+    const trimmed = dateInput.trim()
+    const parts = trimmed.split("-")
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10)
+      const m = parseInt(parts[1], 10) - 1
+      const d = parseInt(parts[2], 10)
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m, d, 12, 0, 0)
+      }
+    }
+    const parsed = new Date(trimmed)
+    return isNaN(parsed.getTime()) ? new Date() : parsed
+  }
+  return new Date()
+}
+
 export async function getPayrollData(params: { month?: string; year?: number }) {
   const now = new Date()
   const year = params.year || now.getFullYear()
@@ -128,6 +149,7 @@ export async function processMasterFinanceSalary(params: {
   bonus?: number
   deductions?: number
   paymentMethod?: string
+  paymentDate?: string | Date
   notes?: string
 }) {
   const session = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT", "ADMIN"])
@@ -141,6 +163,13 @@ export async function processMasterFinanceSalary(params: {
   if (finalAmount <= 0) {
     return { success: false, message: "Net payable salary must be greater than zero." }
   }
+
+  const disburseDate = parseDisbursementDate(params.paymentDate)
+  const disburseDateStr = disburseDate.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -180,6 +209,7 @@ export async function processMasterFinanceSalary(params: {
       const transaction = await tx.transaction.create({
         data: {
           accountId: account.id,
+          date: disburseDate,
           type: "EXPENSE",
           amount: finalAmount,
           category: "SALARY",
@@ -187,7 +217,7 @@ export async function processMasterFinanceSalary(params: {
           scope: "HOSPITAL",
           accountGroupCode: "EXPENSES",
           referenceId: voucherNumber,
-          description: `Salary disbursement for ${employee.name} (${params.month}/${params.year})${params.notes ? ` - ${params.notes}` : ""} [Voucher: ${voucherNumber}]`,
+          description: `Salary disbursement for ${employee.name} (${params.month}/${params.year}) on ${disburseDateStr}${params.notes ? ` - ${params.notes}` : ""} [Voucher: ${voucherNumber}]`,
         },
       })
 
@@ -197,7 +227,7 @@ export async function processMasterFinanceSalary(params: {
         data: { currentBalance: { decrement: finalAmount } },
       })
 
-      // 4. Create SalaryRecord
+      // 4. Create SalaryRecord with specified payment date
       const salaryRecord = await tx.salaryRecord.create({
         data: {
           employeeId: employee.id,
@@ -206,6 +236,7 @@ export async function processMasterFinanceSalary(params: {
           amountPaid: finalAmount,
           bonus,
           deductions,
+          paymentDate: disburseDate,
           status: "PAID",
           transactionId: transaction.id,
         },
@@ -216,8 +247,8 @@ export async function processMasterFinanceSalary(params: {
         data: {
           voucherNumber,
           voucherType: "PAYMENT",
-          date: new Date(),
-          narration: `Payroll disbursement to ${employee.name} (${employee.department || "General"} - ${employee.role}) for period ${params.month}/${params.year}. Base: ₹${basicSalary.toLocaleString("en-IN")}, Bonus: ₹${bonus.toLocaleString("en-IN")}, Deductions: ₹${deductions.toLocaleString("en-IN")}. Paid via ${account.name}.${params.notes ? ` Notes: ${params.notes}` : ""}`,
+          date: disburseDate,
+          narration: `Payroll disbursement to ${employee.name} (${employee.department || "General"} - ${employee.role}) for period ${params.month}/${params.year} on ${disburseDateStr}. Base: ₹${basicSalary.toLocaleString("en-IN")}, Bonus: ₹${bonus.toLocaleString("en-IN")}, Deductions: ₹${deductions.toLocaleString("en-IN")}. Paid via ${account.name}.${params.notes ? ` Notes: ${params.notes}` : ""}`,
           totalAmount: finalAmount,
           status: "POSTED",
           createdBy: session.session.name || "Finance Officer",
@@ -253,6 +284,7 @@ export async function processMasterFinanceSalary(params: {
         employeeName: employee.name,
         voucherNumber,
         salaryRecordId: salaryRecord.id,
+        paymentDate: disburseDate.toISOString(),
       }
     })
 
@@ -266,8 +298,9 @@ export async function processMasterFinanceSalary(params: {
 
     return {
       success: true,
-      message: `Salary for ${result.employeeName} successfully disbursed. Voucher #${result.voucherNumber} posted to General Ledger & Day Book.`,
+      message: `Salary for ${result.employeeName} successfully disbursed on ${disburseDateStr}. Voucher #${result.voucherNumber} posted to General Ledger & Day Book.`,
       voucherNumber: result.voucherNumber,
+      paymentDate: result.paymentDate,
     }
   } catch (error: any) {
     return { success: false, message: error.message || "Failed to process salary" }
@@ -279,9 +312,17 @@ export async function batchProcessMasterFinanceSalaries(params: {
   year: number
   accountId: string
   paymentMethod?: string
+  paymentDate?: string | Date
 }) {
   const session = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT", "ADMIN"])
   if (!session.ok) return { success: false, message: session.error }
+
+  const disburseDate = parseDisbursementDate(params.paymentDate)
+  const disburseDateStr = disburseDate.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
 
   try {
     const account = await prisma.financialAccount.findFirst({
@@ -330,6 +371,7 @@ export async function batchProcessMasterFinanceSalaries(params: {
         const transaction = await tx.transaction.create({
           data: {
             accountId: account.id,
+            date: disburseDate,
             type: "EXPENSE",
             amount: emp.basicSalary,
             category: "SALARY",
@@ -337,7 +379,7 @@ export async function batchProcessMasterFinanceSalaries(params: {
             scope: "HOSPITAL",
             accountGroupCode: "EXPENSES",
             referenceId: vNumber,
-            description: `Batch Salary: ${emp.name} (${params.month}/${params.year}) [Voucher: ${vNumber}]`,
+            description: `Batch Salary: ${emp.name} (${params.month}/${params.year}) on ${disburseDateStr} [Voucher: ${vNumber}]`,
           },
         })
 
@@ -354,6 +396,7 @@ export async function batchProcessMasterFinanceSalaries(params: {
             amountPaid: emp.basicSalary,
             bonus: 0,
             deductions: 0,
+            paymentDate: disburseDate,
             status: "PAID",
             transactionId: transaction.id,
           },
@@ -363,8 +406,8 @@ export async function batchProcessMasterFinanceSalaries(params: {
           data: {
             voucherNumber: vNumber,
             voucherType: "PAYMENT",
-            date: new Date(),
-            narration: `Batch payroll disbursement to ${emp.name} (${emp.department || "General"}) for ${params.month}/${params.year}. Paid via ${account.name}.`,
+            date: disburseDate,
+            narration: `Batch payroll disbursement to ${emp.name} (${emp.department || "General"}) for ${params.month}/${params.year} on ${disburseDateStr}. Paid via ${account.name}.`,
             totalAmount: emp.basicSalary,
             status: "POSTED",
             createdBy: session.session.name || "Finance Admin",
@@ -398,14 +441,79 @@ export async function batchProcessMasterFinanceSalaries(params: {
     revalidatePath("/dashboard/master-finance/vouchers")
     revalidatePath("/dashboard/master-finance/day-book")
     revalidatePath("/dashboard/master-finance/statements/balance-sheet")
-    revalidatePath("/dashboard/hr/payroll")
 
     return {
       success: true,
-      message: `Batch payroll complete: ${processedCount} employees paid totaling ₹${totalBatchAmount.toLocaleString("en-IN")}. Vouchers generated and posted.`,
+      message: `Batch payroll processed successfully for ${processedCount} employees on ${disburseDateStr} from ${account.name}.`,
+      count: processedCount,
     }
   } catch (error: any) {
     return { success: false, message: error.message || "Failed to process batch payroll" }
+  }
+}
+
+export async function updateMasterFinanceSalaryDate(params: {
+  salaryRecordId: string
+  paymentDate: string | Date
+}) {
+  const session = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT", "ADMIN"])
+  if (!session.ok) return { success: false, message: session.error }
+
+  const newDate = parseDisbursementDate(params.paymentDate)
+  const newDateStr = newDate.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const record = await tx.salaryRecord.findUnique({
+        where: { id: params.salaryRecordId },
+        include: { employee: true },
+      })
+      if (!record) throw new Error("Salary record not found")
+
+      await tx.salaryRecord.update({
+        where: { id: record.id },
+        data: { paymentDate: newDate },
+      })
+
+      if (record.transactionId) {
+        const txRecord = await tx.transaction.findUnique({
+          where: { id: record.transactionId },
+        })
+        if (txRecord) {
+          await tx.transaction.update({
+            where: { id: txRecord.id },
+            data: { date: newDate },
+          })
+
+          if (txRecord.referenceId) {
+            await tx.voucher.updateMany({
+              where: { voucherNumber: txRecord.referenceId },
+              data: { date: newDate },
+            })
+          }
+        }
+      }
+
+      return record
+    })
+
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/payroll")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/master-finance/vouchers")
+    revalidatePath("/dashboard/master-finance/day-book")
+
+    return {
+      success: true,
+      message: `Disbursement date updated to ${newDateStr} for ${updated.employee.name}.`,
+      paymentDate: newDate.toISOString(),
+    }
+  } catch (error: any) {
+    return { success: false, message: error.message || "Failed to update disbursement date" }
   }
 }
 

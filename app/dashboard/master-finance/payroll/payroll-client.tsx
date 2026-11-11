@@ -33,8 +33,35 @@ import {
   Check,
   ArrowRight,
   Calendar,
+  Plus,
+  Trash2,
+  Split,
 } from "lucide-react"
 import { toast } from "sonner"
+import { numberToWordsRupees } from "@/lib/number-to-words"
+
+interface SalarySplitItem {
+  accountName: string
+  amount: number
+  paymentMethod: string
+}
+
+interface SplitAllocationItem {
+  id: string
+  accountId: string
+  paymentMethod: string
+  amount: number
+}
+
+interface HospitalSettingsInfo {
+  name: string
+  address: string
+  phone: string
+  email: string
+  website: string
+  gstNo: string | null
+  logoUrl: string | null
+}
 
 interface SalaryRecordInfo {
   id: string
@@ -47,6 +74,7 @@ interface SalaryRecordInfo {
   voucherNumber: string | null
   accountName: string | null
   paymentMethod: string | null
+  splits?: SalarySplitItem[]
 }
 
 interface EmployeePayroll {
@@ -119,6 +147,7 @@ export function PayrollClient() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<"ALL" | "UNPAID" | "PAID">("ALL")
   const [selectedDept, setSelectedDept] = useState<string>("ALL")
+  const [hospitalSettings, setHospitalSettings] = useState<HospitalSettingsInfo | null>(null)
 
   // Modals state
   const [disburseModalEmp, setDisburseModalEmp] = useState<EmployeePayroll | null>(null)
@@ -130,6 +159,7 @@ export function PayrollClient() {
     paymentMethod: "BANK_TRANSFER",
     paymentDate: getTodayDateString(),
     notes: "",
+    splitAllocations: [] as SplitAllocationItem[],
   })
 
   const [batchModalOpen, setBatchModalOpen] = useState(false)
@@ -161,6 +191,9 @@ export function PayrollClient() {
       setPaidCount(data.paidCount)
       setPendingCount(data.pendingCount)
       setDepartments(data.departments)
+      if (data.hospitalSettings) {
+        setHospitalSettings(data.hospitalSettings)
+      }
 
       // Set default account for disburse modals if available
       if (data.accounts && data.accounts.length > 0 && !batchAccountId) {
@@ -218,6 +251,9 @@ export function PayrollClient() {
   // Open single disburse modal
   function openDisburseModal(emp: EmployeePayroll) {
     const defaultAcc = accounts.find((a) => a.currentBalance >= emp.basicSalary) || accounts[0]
+    const bankAcc = accounts.find((a) => a.type === "BANK") || accounts[0]
+    const cashAcc = accounts.find((a) => a.type === "CASH") || accounts[1] || accounts[0]
+
     setDisburseModalEmp(emp)
     setDisburseForm({
       basicSalary: emp.basicSalary,
@@ -227,6 +263,20 @@ export function PayrollClient() {
       paymentMethod: "BANK_TRANSFER",
       paymentDate: getTodayDateString(),
       notes: "",
+      splitAllocations: [
+        {
+          id: "split-1",
+          accountId: bankAcc?.id || "",
+          paymentMethod: "BANK_TRANSFER",
+          amount: Math.max(0, emp.basicSalary),
+        },
+        {
+          id: "split-2",
+          accountId: cashAcc?.id || "",
+          paymentMethod: "CASH",
+          amount: 0,
+        },
+      ],
     })
   }
 
@@ -236,26 +286,125 @@ export function PayrollClient() {
     const b = Number(disburseForm.bonus) || 0
     const d = Number(disburseForm.deductions) || 0
     return Math.max(0, Math.round((base + b - d) * 100) / 100)
-  }, [disburseForm])
+  }, [disburseForm.basicSalary, disburseForm.bonus, disburseForm.deductions])
+
+  const isSplitPayment = disburseForm.paymentMethod === "SPLIT"
+
+  const totalSplitAllocated = useMemo(() => {
+    if (!isSplitPayment) return liveNetPayable
+    return disburseForm.splitAllocations.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+  }, [isSplitPayment, disburseForm.splitAllocations, liveNetPayable])
+
+  const splitDifference = useMemo(() => {
+    return Math.round((liveNetPayable - totalSplitAllocated) * 100) / 100
+  }, [liveNetPayable, totalSplitAllocated])
+
+  function addSplitRow() {
+    const usedIds = new Set(disburseForm.splitAllocations.map((s) => s.accountId))
+    const unusedAcc = accounts.find((a) => !usedIds.has(a.id)) || accounts[0]
+    const newRow: SplitAllocationItem = {
+      id: `split-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      accountId: unusedAcc?.id || "",
+      paymentMethod: unusedAcc?.type === "CASH" ? "CASH" : "BANK_TRANSFER",
+      amount: splitDifference > 0 ? splitDifference : 0,
+    }
+    setDisburseForm((prev) => ({
+      ...prev,
+      splitAllocations: [...prev.splitAllocations, newRow],
+    }))
+  }
+
+  function removeSplitRow(index: number) {
+    if (disburseForm.splitAllocations.length <= 1) return
+    setDisburseForm((prev) => ({
+      ...prev,
+      splitAllocations: prev.splitAllocations.filter((_, i) => i !== index),
+    }))
+  }
+
+  function updateSplitRow(index: number, field: keyof SplitAllocationItem, val: any) {
+    setDisburseForm((prev) => {
+      const updated = [...prev.splitAllocations]
+      updated[index] = { ...updated[index], [field]: val }
+      return { ...prev, splitAllocations: updated }
+    })
+  }
+
+  function autoBalanceRemaining() {
+    if (splitDifference === 0) return
+    setDisburseForm((prev) => {
+      const updated = [...prev.splitAllocations]
+      const lastIdx = updated.length - 1
+      if (lastIdx >= 0) {
+        const curAmt = Number(updated[lastIdx].amount) || 0
+        const newAmt = Math.max(0, Math.round((curAmt + splitDifference) * 100) / 100)
+        updated[lastIdx] = { ...updated[lastIdx], amount: newAmt }
+      }
+      return { ...prev, splitAllocations: updated }
+    })
+  }
 
   // Submit single salary disburse
   async function handleDisburseSubmit() {
     if (!disburseModalEmp) return
-    if (!disburseForm.accountId) {
-      toast.error("Please select a disbursement account.")
-      return
-    }
     if (liveNetPayable <= 0) {
       toast.error("Net payable salary must be greater than ₹0.")
       return
     }
 
-    const selectedAcc = accounts.find((a) => a.id === disburseForm.accountId)
-    if (selectedAcc && selectedAcc.currentBalance < liveNetPayable) {
-      toast.error(
-        `Insufficient balance in ${selectedAcc.name}. Available: ₹${selectedAcc.currentBalance.toLocaleString("en-IN")}`
-      )
-      return
+    if (isSplitPayment) {
+      if (disburseForm.splitAllocations.length < 2) {
+        toast.error("Split payment requires at least 2 payment channels.")
+        return
+      }
+
+      if (Math.abs(splitDifference) > 0.01) {
+        if (splitDifference > 0) {
+          toast.error(`Split allocation incomplete. ₹${splitDifference.toLocaleString("en-IN")} remains unallocated.`)
+        } else {
+          toast.error(`Split allocation exceeds net salary by ₹${Math.abs(splitDifference).toLocaleString("en-IN")}.`)
+        }
+        return
+      }
+
+      for (const [idx, item] of disburseForm.splitAllocations.entries()) {
+        if (!item.accountId) {
+          toast.error(`Please select an account for split channel #${idx + 1}.`)
+          return
+        }
+        if (Number(item.amount) <= 0) {
+          toast.error(`Amount for split channel #${idx + 1} must be greater than ₹0.`)
+          return
+        }
+      }
+
+      // Aggregate balance requirements per account
+      const requiredSums: Record<string, number> = {}
+      for (const item of disburseForm.splitAllocations) {
+        requiredSums[item.accountId] = (requiredSums[item.accountId] || 0) + Number(item.amount)
+      }
+      for (const [accId, amt] of Object.entries(requiredSums)) {
+        const acc = accounts.find((a) => a.id === accId)
+        if (acc && acc.currentBalance < amt) {
+          toast.error(
+            `Insufficient balance in ${acc.name}. Required: ₹${amt.toLocaleString("en-IN")}, Available: ₹${acc.currentBalance.toLocaleString("en-IN")}`
+          )
+          return
+        }
+      }
+    } else {
+      if (!disburseForm.accountId) {
+        toast.error("Please select a disbursement account.")
+        return
+      }
+
+      const selectedAcc = accounts.find((a) => a.id === disburseForm.accountId)
+      if (selectedAcc && selectedAcc.currentBalance < liveNetPayable) {
+        toast.error(
+          `Insufficient balance in ${selectedAcc.name}. Available: ₹${selectedAcc.currentBalance.toLocaleString("en-IN")}`
+        )
+        return
+      }
     }
 
     setActionLoading(true)
@@ -264,13 +413,20 @@ export function PayrollClient() {
         employeeId: disburseModalEmp.id,
         month,
         year,
-        accountId: disburseForm.accountId,
+        accountId: isSplitPayment ? undefined : disburseForm.accountId,
         basicSalary: disburseForm.basicSalary,
         bonus: disburseForm.bonus,
         deductions: disburseForm.deductions,
         paymentMethod: disburseForm.paymentMethod,
         paymentDate: disburseForm.paymentDate,
         notes: disburseForm.notes,
+        splitPayments: isSplitPayment
+          ? disburseForm.splitAllocations.map((s) => ({
+              accountId: s.accountId,
+              paymentMethod: s.paymentMethod,
+              amount: Number(s.amount) || 0,
+            }))
+          : undefined,
       })
 
       if (res.success) {
@@ -285,6 +441,453 @@ export function PayrollClient() {
     } finally {
       setActionLoading(false)
     }
+  }
+
+  // Print Executive Hospital Payslip
+  function handlePrintPayslip(emp: EmployeePayroll, rec: SalaryRecordInfo) {
+    const hospitalName = hospitalSettings?.name || "SHREE KAMAL HOSPITAL & RESEARCH CENTRE"
+    const hospitalAddress = hospitalSettings?.address || "At/PO: Bargarh, Odisha - 768028"
+    const phone = hospitalSettings?.phone || ""
+    const email = hospitalSettings?.email || ""
+    const website = hospitalSettings?.website || ""
+    const gstNo = hospitalSettings?.gstNo || ""
+    const logoUrl = hospitalSettings?.logoUrl || ""
+
+    const periodStr = `${MONTH_NAMES[parseInt(month) - 1]} ${year}`
+    const disburseDateFormatted = rec.paymentDate
+      ? new Date(rec.paymentDate).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+      : new Date().toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+    const amountWords = numberToWordsRupees(rec.amountPaid)
+    const isSplit = rec.paymentMethod === "SPLIT" || (rec.splits && rec.splits.length > 0)
+
+    const iframe = document.createElement("iframe")
+    iframe.style.position = "fixed"
+    iframe.style.right = "0"
+    iframe.style.bottom = "0"
+    iframe.style.width = "0"
+    iframe.style.height = "0"
+    iframe.style.border = "none"
+    iframe.setAttribute("aria-hidden", "true")
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentWindow?.document
+    if (!doc) {
+      toast.error("Failed to initialize print frame")
+      return
+    }
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Payslip - ${emp.name} - ${periodStr}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm 12mm;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #0f172a;
+      background: #ffffff;
+      margin: 0;
+      padding: 0;
+      font-size: 11.5px;
+      line-height: 1.45;
+    }
+    .sheet {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 22px 26px;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .header-table {
+      width: 100%;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+    }
+    .hospital-logo {
+      height: 60px;
+      max-width: 190px;
+      object-fit: contain;
+      vertical-align: middle;
+    }
+    .hospital-name {
+      font-size: 18px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: -0.2px;
+      color: #0f172a;
+      margin: 0 0 2px 0;
+    }
+    .hospital-info {
+      font-size: 10.5px;
+      color: #475569;
+      line-height: 1.35;
+      margin: 0;
+    }
+    .hospital-contact {
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .voucher-pill {
+      display: inline-block;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-top: 4px;
+    }
+    .title-banner {
+      background: #0f172a;
+      color: #ffffff;
+      text-align: center;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 14px;
+    }
+    .title-banner h2 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin: 0;
+    }
+    .title-banner p {
+      font-size: 10px;
+      color: #cbd5e1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      margin: 2px 0 0 0;
+    }
+    .grid-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .grid-table td {
+      padding: 6px 12px;
+      font-size: 11px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .lbl {
+      color: #64748b;
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 600;
+      width: 18%;
+    }
+    .val {
+      color: #0f172a;
+      font-weight: 600;
+      width: 32%;
+    }
+    .finance-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .finance-table th {
+      background: #f1f5f9;
+      padding: 8px 12px;
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #334155;
+      font-weight: 700;
+      border-bottom: 1px solid #cbd5e1;
+    }
+    .finance-table td {
+      padding: 7px 12px;
+      font-size: 11px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .num {
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 600;
+    }
+    .total-row td {
+      background: #f8fafc;
+      font-weight: 700;
+      border-top: 1px solid #cbd5e1;
+      border-bottom: 1px solid #cbd5e1;
+    }
+    .net-box {
+      background: #f8fafc;
+      border: 1.5px solid #0f172a;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .net-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .net-amount {
+      font-size: 22px;
+      font-weight: 800;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #0f172a;
+    }
+    .net-words {
+      font-size: 11px;
+      color: #334155;
+      font-style: italic;
+      margin-top: 3px;
+    }
+    .split-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14px;
+      border: 1px dashed #94a3b8;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+    .split-table th {
+      text-align: left;
+      font-size: 10px;
+      color: #475569;
+      text-transform: uppercase;
+      padding: 6px 10px;
+      background: #f1f5f9;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .split-table td {
+      padding: 6px 10px;
+      font-size: 11px;
+      border-bottom: 1px dotted #e2e8f0;
+    }
+    .sigs-container {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 42px;
+      padding-top: 8px;
+    }
+    .sig-cell {
+      text-align: center;
+      width: 29%;
+    }
+    .sig-line {
+      border-top: 1px solid #0f172a;
+      padding-top: 6px;
+      font-weight: 600;
+      font-size: 10.5px;
+      color: #1e293b;
+    }
+    .sig-sub {
+      font-size: 9.5px;
+      color: #64748b;
+      margin-top: 1px;
+    }
+    .footer-note {
+      margin-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 6px;
+      text-align: center;
+      font-size: 9px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <table class="header-table">
+      <tr>
+        <td style="vertical-align: middle; width: ${logoUrl ? '70px' : '0'};">
+          ${logoUrl ? `<img src="${logoUrl}" alt="Logo" class="hospital-logo" />` : ''}
+        </td>
+        <td style="vertical-align: middle; padding-left: ${logoUrl ? '14px' : '0'};">
+          <h1 class="hospital-name">${hospitalName}</h1>
+          <p class="hospital-info">${hospitalAddress}</p>
+          <div class="hospital-contact">
+            ${phone ? `<span>Phone: ${phone}</span> &bull; ` : ''}
+            ${email ? `<span>Email: ${email}</span>` : ''}
+            ${website ? ` &bull; <span>Website: ${website}</span>` : ''}
+          </div>
+        </td>
+        <td style="vertical-align: middle; text-align: right; width: 180px;">
+          ${gstNo ? `<div style="font-size: 10px; color: #475569;"><strong>GSTIN:</strong> ${gstNo}</div>` : ''}
+          <div style="font-size: 9.5px; color: #64748b; text-transform: uppercase; margin-top: 2px;">AUDIT PAYMENT VOUCHER</div>
+          <div class="voucher-pill">${rec.voucherNumber || "PV-SALARY"}</div>
+        </td>
+      </tr>
+    </table>
+
+    <div class="title-banner">
+      <h2>SALARY PAYSLIP & PAYMENT VOUCHER</h2>
+      <p>PERIOD: ${periodStr.toUpperCase()} &bull; PAYMENT DATE: ${disburseDateFormatted}</p>
+    </div>
+
+    <table class="grid-table">
+      <tr>
+        <td class="lbl">Staff Name</td>
+        <td class="val">${emp.name}</td>
+        <td class="lbl">Voucher No</td>
+        <td class="val" style="font-family: monospace;">${rec.voucherNumber || "PV-SALARY"}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Designation</td>
+        <td class="val">${emp.role}</td>
+        <td class="lbl">Payment Date</td>
+        <td class="val">${disburseDateFormatted}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Department</td>
+        <td class="val">${emp.department}</td>
+        <td class="lbl">Payment Channel</td>
+        <td class="val">${isSplit ? "SPLIT (Multi-Channel)" : (rec.paymentMethod || "Bank Transfer")}</td>
+      </tr>
+      <tr>
+        <td class="lbl">Staff Code</td>
+        <td class="val" style="font-family: monospace;">${emp.id.slice(-8).toUpperCase()}</td>
+        <td class="lbl">Account / Debit</td>
+        <td class="val">${isSplit ? "Multi-Account Split" : (rec.accountName || "Hospital Bank Account")}</td>
+      </tr>
+    </table>
+
+    <table class="finance-table">
+      <thead>
+        <tr>
+          <th style="width: 35%; text-align: left;">Earnings & Allowances</th>
+          <th style="width: 15%; text-align: right;">Amount (₹)</th>
+          <th style="width: 35%; text-align: left;">Deductions & Advances</th>
+          <th style="width: 15%; text-align: right;">Amount (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Basic Salary</td>
+          <td class="num">₹${emp.basicSalary.toLocaleString("en-IN")}</td>
+          <td>Statutory / Advance Deductions</td>
+          <td class="num" style="color: #b91c1c;">₹${rec.deductions.toLocaleString("en-IN")}</td>
+        </tr>
+        <tr>
+          <td>Duty Bonus / Performance Allowance</td>
+          <td class="num" style="color: #15803d;">₹${rec.bonus.toLocaleString("en-IN")}</td>
+          <td>Tax Deducted at Source (TDS) / Other</td>
+          <td class="num" style="color: #64748b;">₹0</td>
+        </tr>
+        <tr class="total-row">
+          <td>Total Gross Earnings</td>
+          <td class="num">₹${(emp.basicSalary + rec.bonus).toLocaleString("en-IN")}</td>
+          <td>Total Deductions</td>
+          <td class="num" style="color: #b91c1c;">₹${rec.deductions.toLocaleString("en-IN")}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="net-box">
+      <div>
+        <div class="net-label">NET SALARY DISBURSED</div>
+        <div class="net-words"><strong>In Words:</strong> ${amountWords}</div>
+      </div>
+      <div style="text-align: right;">
+        <div class="net-amount">₹${rec.amountPaid.toLocaleString("en-IN")}</div>
+        <div style="font-size: 9.5px; color: #64748b; font-family: monospace;">AUDIT VERIFIED & POSTED</div>
+      </div>
+    </div>
+
+    ${isSplit && rec.splits && rec.splits.length > 0 ? `
+      <table class="split-table">
+        <thead>
+          <tr>
+            <th colspan="4" style="background: #e2e8f0; font-weight: 700; color: #1e293b;">
+              Split Payment Allocation Breakdown
+            </th>
+          </tr>
+          <tr>
+            <th style="width: 30px;">#</th>
+            <th>Payment Channel</th>
+            <th>Debit Account</th>
+            <th style="text-align: right;">Disbursed Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rec.splits.map((s, idx) => `
+            <tr>
+              <td style="font-family: monospace;">${idx + 1}</td>
+              <td><strong>${s.paymentMethod}</strong></td>
+              <td>${s.accountName}</td>
+              <td class="num">₹${s.amount.toLocaleString("en-IN")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    ` : ''}
+
+    <div class="sigs-container">
+      <div class="sig-cell">
+        <div style="height: 38px;"></div>
+        <div class="sig-line">Employee Signature</div>
+        <div class="sig-sub">Acknowledged Receipt</div>
+      </div>
+      <div class="sig-cell">
+        <div style="height: 38px;"></div>
+        <div class="sig-line">Prepared & Verified By</div>
+        <div class="sig-sub">Finance & Accounts Officer</div>
+      </div>
+      <div class="sig-cell">
+        <div style="height: 38px;"></div>
+        <div class="sig-line">Authorized Signatory</div>
+        <div class="sig-sub">Medical Superintendent / Director</div>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      This is an official system-generated salary voucher & payment advice &bull; ${hospitalName} &bull; Confidential
+    </div>
+  </div>
+</body>
+</html>
+`
+
+    doc.open()
+    doc.write(html)
+    doc.close()
+
+    iframe.contentWindow?.focus()
+    setTimeout(() => {
+      iframe.contentWindow?.print()
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe)
+        }
+      }, 1500)
+    }, 400)
   }
 
   // Submit batch disburse
@@ -507,21 +1110,19 @@ export function PayrollClient() {
             <span className="text-slate-400 font-medium">Quick Periods:</span>
             <button
               onClick={() => applyPreset(currentMonthNum, now.getFullYear())}
-              className={`px-3 py-1.5 rounded-lg font-mono transition cursor-pointer ${
-                parseInt(month) === currentMonthNum && year === now.getFullYear()
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "bg-slate-800/60 hover:bg-slate-800 text-slate-300"
-              }`}
+              className={`px-3 py-1.5 rounded-lg font-mono transition cursor-pointer ${parseInt(month) === currentMonthNum && year === now.getFullYear()
+                ? "bg-indigo-600 text-white font-bold"
+                : "bg-slate-800/60 hover:bg-slate-800 text-slate-300"
+                }`}
             >
               This Month ({MONTH_NAMES[currentMonthNum - 1]?.slice(0, 3)} {now.getFullYear()})
             </button>
             <button
               onClick={() => applyPreset(prevMonthNum, prevMonthYear)}
-              className={`px-3 py-1.5 rounded-lg font-mono transition cursor-pointer ${
-                parseInt(month) === prevMonthNum && year === prevMonthYear
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "bg-slate-800/60 hover:bg-slate-800 text-slate-300"
-              }`}
+              className={`px-3 py-1.5 rounded-lg font-mono transition cursor-pointer ${parseInt(month) === prevMonthNum && year === prevMonthYear
+                ? "bg-indigo-600 text-white font-bold"
+                : "bg-slate-800/60 hover:bg-slate-800 text-slate-300"
+                }`}
             >
               Last Month ({MONTH_NAMES[prevMonthNum - 1]?.slice(0, 3)} {prevMonthYear})
             </button>
@@ -661,11 +1262,10 @@ export function PayrollClient() {
                 <div
                   key={dept.name}
                   onClick={() => setSelectedDept(selectedDept === dept.name ? "ALL" : dept.name)}
-                  className={`p-3 rounded-lg border transition cursor-pointer ${
-                    selectedDept === dept.name
-                      ? "border-indigo-500 bg-indigo-50/50"
-                      : "border-slate-100 bg-slate-50/60 hover:bg-slate-100/60"
-                  }`}
+                  className={`p-3 rounded-lg border transition cursor-pointer ${selectedDept === dept.name
+                    ? "border-indigo-500 bg-indigo-50/50"
+                    : "border-slate-100 bg-slate-50/60 hover:bg-slate-100/60"
+                    }`}
                 >
                   <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
                     <span className="truncate">{dept.name}</span>
@@ -676,9 +1276,8 @@ export function PayrollClient() {
                   </div>
                   <div className="w-full bg-slate-200 rounded-full h-1.5 mt-2 overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${
-                        pct === 100 ? "bg-emerald-500" : pct > 0 ? "bg-indigo-500" : "bg-slate-300"
-                      }`}
+                      className={`h-full rounded-full transition-all ${pct === 100 ? "bg-emerald-500" : pct > 0 ? "bg-indigo-500" : "bg-slate-300"
+                        }`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
@@ -717,26 +1316,23 @@ export function PayrollClient() {
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium self-start md:self-auto">
           <button
             onClick={() => setStatusFilter("ALL")}
-            className={`px-3 py-1.5 rounded-md transition cursor-pointer ${
-              statusFilter === "ALL" ? "bg-white text-slate-900 shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`px-3 py-1.5 rounded-md transition cursor-pointer ${statusFilter === "ALL" ? "bg-white text-slate-900 shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
+              }`}
           >
             All Staff ({employees.length})
           </button>
           <button
             onClick={() => setStatusFilter("UNPAID")}
-            className={`px-3 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1 ${
-              statusFilter === "UNPAID" ? "bg-white text-amber-700 shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`px-3 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1 ${statusFilter === "UNPAID" ? "bg-white text-amber-700 shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
+              }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
             Unpaid ({pendingCount})
           </button>
           <button
             onClick={() => setStatusFilter("PAID")}
-            className={`px-3 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1 ${
-              statusFilter === "PAID" ? "bg-white text-emerald-700 shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`px-3 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1 ${statusFilter === "PAID" ? "bg-white text-emerald-700 shadow-sm font-semibold" : "text-slate-600 hover:text-slate-900"
+              }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             Disbursed ({paidCount})
@@ -816,9 +1412,8 @@ export function PayrollClient() {
                   return (
                     <tr
                       key={emp.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${
-                        isPaid ? "bg-white" : "bg-amber-50/20"
-                      }`}
+                      className={`hover:bg-slate-50/80 transition-colors ${isPaid ? "bg-white" : "bg-amber-50/20"
+                        }`}
                     >
                       {/* 1. Staff Name */}
                       <td className="py-3.5 px-4">
@@ -913,10 +1508,10 @@ export function PayrollClient() {
                               <span className="font-semibold text-slate-700">
                                 {emp.record?.paymentDate
                                   ? new Date(emp.record.paymentDate).toLocaleDateString("en-IN", {
-                                      day: "2-digit",
-                                      month: "short",
-                                      year: "numeric",
-                                    })
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })
                                   : "—"}
                               </span>
                               <span className="text-slate-300">•</span>
@@ -1042,44 +1637,6 @@ export function PayrollClient() {
                 </div>
               </div>
 
-              {/* Disbursement Source Account Selector */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Disbursement Account (Debit Source)
-                </label>
-                <select
-                  value={disburseForm.accountId}
-                  onChange={(e) => setDisburseForm({ ...disburseForm, accountId: e.target.value })}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                >
-                  <option value="">Select Hospital Financial Account...</option>
-                  {accounts.map((acc) => {
-                    const hasFunds = acc.currentBalance >= liveNetPayable
-                    return (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.name} ({acc.type}) — Available: ₹{acc.currentBalance.toLocaleString("en-IN")}
-                        {!hasFunds ? " [INSUFFICIENT FUNDS]" : ""}
-                      </option>
-                    )
-                  })}
-                </select>
-                {disburseForm.accountId && (
-                  <div className="mt-1 text-[11px] text-slate-500 flex items-center justify-between">
-                    <span>
-                      Current Balance: ₹
-                      {accounts
-                        .find((a) => a.id === disburseForm.accountId)
-                        ?.currentBalance.toLocaleString("en-IN") || 0}
-                    </span>
-                    {accounts.find((a) => a.id === disburseForm.accountId && a.currentBalance < liveNetPayable) && (
-                      <span className="text-rose-600 font-semibold flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> Insufficient balance
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
               {/* Disbursement Date & Payment Channel */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1098,16 +1655,207 @@ export function PayrollClient() {
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">Payment Channel</label>
                   <select
                     value={disburseForm.paymentMethod}
-                    onChange={(e) => setDisburseForm({ ...disburseForm, paymentMethod: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
+                    onChange={(e) => {
+                      const newMethod = e.target.value
+                      setDisburseForm((prev) => {
+                        let updatedSplits = prev.splitAllocations
+                        if (newMethod === "SPLIT" && (!updatedSplits || updatedSplits.length === 0)) {
+                          const bankAcc = accounts.find((a) => a.type === "BANK") || accounts[0]
+                          const cashAcc = accounts.find((a) => a.type === "CASH") || accounts[1] || accounts[0]
+                          updatedSplits = [
+                            { id: "split-1", accountId: bankAcc?.id || "", paymentMethod: "BANK_TRANSFER", amount: liveNetPayable },
+                            { id: "split-2", accountId: cashAcc?.id || "", paymentMethod: "CASH", amount: 0 },
+                          ]
+                        }
+                        return { ...prev, paymentMethod: newMethod, splitAllocations: updatedSplits }
+                      })
+                    }}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 outline-none bg-white font-medium"
                   >
                     <option value="BANK_TRANSFER">Bank Transfer / NEFT</option>
                     <option value="UPI">UPI Transfer</option>
                     <option value="CASH">Cash Drawer</option>
                     <option value="CHEQUE">Cheque</option>
+                    <option value="SPLIT">Split Payment (Multi-Channel / Multi-Account)</option>
                   </select>
                 </div>
               </div>
+
+              {/* Conditional Account Selector: Split Allocator vs Single Account */}
+              {isSplitPayment ? (
+                <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-indigo-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Split className="w-4 h-4 text-indigo-600" />
+                      <span className="text-xs font-bold text-slate-800">Split Channels & Debit Accounts</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
+                        {disburseForm.splitAllocations.length} Channels
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addSplitRow}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-200 rounded-lg shadow-2xs transition cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Add Channel
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {disburseForm.splitAllocations.map((item, index) => {
+                      const selectedAcc = accounts.find((a) => a.id === item.accountId)
+                      const hasInsufficient = selectedAcc && selectedAcc.currentBalance < item.amount
+                      return (
+                        <div
+                          key={item.id}
+                          className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">
+                              Channel #{index + 1}
+                            </span>
+                            {disburseForm.splitAllocations.length > 2 && (
+                              <button
+                                type="button"
+                                onClick={() => removeSplitRow(index)}
+                                className="text-slate-400 hover:text-rose-600 p-0.5 rounded transition cursor-pointer"
+                                title="Remove channel"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                            <div className="md:col-span-4">
+                              <label className="block text-[10px] font-medium text-slate-600 mb-0.5">Method</label>
+                              <select
+                                value={item.paymentMethod}
+                                onChange={(e) => updateSplitRow(index, "paymentMethod", e.target.value)}
+                                className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-md bg-white focus:ring-1 focus:ring-indigo-500 outline-none font-medium"
+                              >
+                                <option value="BANK_TRANSFER">Bank Transfer</option>
+                                <option value="UPI">UPI Transfer</option>
+                                <option value="CASH">Cash Drawer</option>
+                                <option value="CHEQUE">Cheque</option>
+                              </select>
+                            </div>
+
+                            <div className="md:col-span-5">
+                              <label className="block text-[10px] font-medium text-slate-600 mb-0.5">Debit Account</label>
+                              <select
+                                value={item.accountId}
+                                onChange={(e) => updateSplitRow(index, "accountId", e.target.value)}
+                                className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-md bg-white focus:ring-1 focus:ring-indigo-500 outline-none truncate font-medium"
+                              >
+                                <option value="">Select Account...</option>
+                                {accounts.map((acc) => (
+                                  <option key={acc.id} value={acc.id}>
+                                    {acc.name} (₹{acc.currentBalance.toLocaleString("en-IN")})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="md:col-span-3">
+                              <label className="block text-[10px] font-medium text-slate-600 mb-0.5">Amount (₹)</label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={item.amount}
+                                onChange={(e) => updateSplitRow(index, "amount", Number(e.target.value))}
+                                className={`w-full px-2 py-1.5 text-xs font-mono font-bold border rounded-md outline-none text-right ${
+                                  hasInsufficient
+                                    ? "border-rose-400 bg-rose-50 text-rose-700"
+                                    : "border-slate-300 focus:ring-1 focus:ring-indigo-500"
+                                }`}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5 border-t border-slate-100">
+                            <span>
+                              Available: ₹{selectedAcc ? selectedAcc.currentBalance.toLocaleString("en-IN") : "0"}
+                            </span>
+                            {hasInsufficient && (
+                              <span className="text-rose-600 font-semibold flex items-center gap-0.5">
+                                <AlertCircle className="w-3 h-3" /> Insufficient balance
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Split Allocation Balance Bar */}
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs font-mono">
+                    <div className="text-slate-600">
+                      Allocated: <span className="font-bold text-slate-900">₹{totalSplitAllocated.toLocaleString("en-IN")}</span> / ₹{liveNetPayable.toLocaleString("en-IN")}
+                    </div>
+                    {splitDifference === 0 ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Balanced
+                      </span>
+                    ) : splitDifference > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-700 font-bold text-[11px]">
+                          ₹{splitDifference.toLocaleString("en-IN")} unallocated
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => autoBalanceRemaining()}
+                          className="px-2 py-0.5 text-[10px] bg-indigo-600 text-white rounded font-sans font-medium hover:bg-indigo-700 transition cursor-pointer"
+                        >
+                          Auto Balance
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-rose-600 font-bold text-[11px]">
+                        Overallocated by ₹{Math.abs(splitDifference).toLocaleString("en-IN")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Single Disbursement Source Account Selector */
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Disbursement Account (Debit Source)
+                  </label>
+                  <select
+                    value={disburseForm.accountId}
+                    onChange={(e) => setDisburseForm({ ...disburseForm, accountId: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white font-medium"
+                  >
+                    <option value="">Select Hospital Financial Account...</option>
+                    {accounts.map((acc) => {
+                      const hasFunds = acc.currentBalance >= liveNetPayable
+                      return (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} ({acc.type}) — Available: ₹{acc.currentBalance.toLocaleString("en-IN")}
+                          {!hasFunds ? " [INSUFFICIENT FUNDS]" : ""}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  {disburseForm.accountId && (
+                    <div className="mt-1 text-[11px] text-slate-500 flex items-center justify-between">
+                      <span>
+                        Current Balance: ₹
+                        {accounts
+                          .find((a) => a.id === disburseForm.accountId)
+                          ?.currentBalance.toLocaleString("en-IN") || 0}
+                      </span>
+                      {accounts.find((a) => a.id === disburseForm.accountId && a.currentBalance < liveNetPayable) && (
+                        <span className="text-rose-600 font-semibold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Insufficient balance
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Remarks / Reference */}
               <div>
@@ -1133,12 +1881,24 @@ export function PayrollClient() {
                   <span>DR: 5000 Salaries & Wages Expense</span>
                   <span className="font-bold text-slate-900">₹{liveNetPayable.toLocaleString("en-IN")}</span>
                 </div>
-                <div className="flex justify-between text-slate-700">
-                  <span>
-                    CR: {accounts.find((a) => a.id === disburseForm.accountId)?.name || "Selected Account"}
-                  </span>
-                  <span className="font-bold text-slate-900">₹{liveNetPayable.toLocaleString("en-IN")}</span>
-                </div>
+                {isSplitPayment ? (
+                  disburseForm.splitAllocations.map((item, idx) => {
+                    const acc = accounts.find((a) => a.id === item.accountId)
+                    return (
+                      <div key={item.id || idx} className="flex justify-between text-slate-600 pl-2 border-l-2 border-indigo-200">
+                        <span>CR: {acc?.name || `Channel #${idx + 1}`} ({item.paymentMethod})</span>
+                        <span className="font-bold text-slate-800">₹{(Number(item.amount) || 0).toLocaleString("en-IN")}</span>
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="flex justify-between text-slate-700">
+                    <span>
+                      CR: {accounts.find((a) => a.id === disburseForm.accountId)?.name || "Selected Account"}
+                    </span>
+                    <span className="font-bold text-slate-900">₹{liveNetPayable.toLocaleString("en-IN")}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1322,11 +2082,11 @@ export function PayrollClient() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition cursor-pointer"
+                  onClick={() => handlePrintPayslip(payslipModalData.employee, payslipModalData.record)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  Print
+                  Print Payslip (A4)
                 </button>
                 <button
                   onClick={() => setPayslipModalData(null)}
@@ -1337,23 +2097,41 @@ export function PayrollClient() {
               </div>
             </div>
 
-            {/* Printable Payslip Sheet */}
-            <div className="p-6 md:p-8 space-y-6 text-slate-800 print:p-0">
+            {/* Payslip Sheet Preview */}
+            <div className="p-6 md:p-8 space-y-5 text-slate-800 max-h-[80vh] overflow-y-auto">
               {/* Hospital Banner */}
               <div className="border-b border-slate-200 pb-4 text-center space-y-1">
+                {hospitalSettings?.logoUrl ? (
+                  <img
+                    src={hospitalSettings.logoUrl}
+                    alt={hospitalSettings.name || "Hospital Logo"}
+                    className="h-14 max-w-[200px] object-contain mx-auto mb-2"
+                  />
+                ) : null}
                 <h2 className="text-xl font-black tracking-tight text-slate-900 uppercase">
-                  SHREE KAMAL HOSPITAL & RESEARCH CENTRE
+                  {hospitalSettings?.name || "SHREE KAMAL HOSPITAL & RESEARCH CENTRE"}
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Master Finance Division • Department of Accounts & Human Capital
+                <p className="text-xs text-slate-600">
+                  {hospitalSettings?.address || "Master Finance Division • Department of Accounts & Human Capital"}
                 </p>
-                <div className="inline-block mt-1 px-3 py-0.5 rounded-full text-[11px] font-mono font-bold bg-slate-100 text-slate-700">
+                {(hospitalSettings?.phone || hospitalSettings?.email || hospitalSettings?.gstNo) && (
+                  <p className="text-[11px] text-slate-500">
+                    {[
+                      hospitalSettings.phone && `Tel: ${hospitalSettings.phone}`,
+                      hospitalSettings.email && `Email: ${hospitalSettings.email}`,
+                      hospitalSettings.gstNo && `GSTIN: ${hospitalSettings.gstNo}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ")}
+                  </p>
+                )}
+                <div className="inline-block mt-2 px-3 py-0.5 rounded-full text-[11px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
                   SALARY DISBURSEMENT SLIP — {MONTH_NAMES[parseInt(month) - 1]?.toUpperCase()} {year}
                 </div>
               </div>
 
               {/* Employee & Voucher Metadata */}
-              <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div>
                   <div className="text-slate-400 text-[10px] uppercase font-semibold">Staff Details</div>
                   <div className="font-bold text-sm text-slate-900 mt-0.5">{payslipModalData.employee.name}</div>
@@ -1385,14 +2163,14 @@ export function PayrollClient() {
                         setEditPaymentDateValue(cur)
                         setEditingDisburseDate(!editingDisburseDate)
                       }}
-                      className="no-print p-1 rounded-md text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-200 transition cursor-pointer"
+                      className="p-1 rounded-md text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-200 transition cursor-pointer"
                       title="Adjust Disbursement Date"
                     >
                       <Edit3 className="w-3 h-3" />
                     </button>
                   </div>
                   {editingDisburseDate && (
-                    <div className="no-print mt-2 p-2.5 bg-indigo-50/90 rounded-lg border border-indigo-200 text-right space-y-1.5 animate-in fade-in duration-100">
+                    <div className="mt-2 p-2.5 bg-indigo-50/90 rounded-lg border border-indigo-200 text-right space-y-1.5 animate-in fade-in duration-100">
                       <div className="text-[10px] text-indigo-900 font-semibold uppercase tracking-wider">
                         Update Disbursed Date
                       </div>
@@ -1421,8 +2199,8 @@ export function PayrollClient() {
                       </div>
                     </div>
                   )}
-                  <div className="text-slate-500 text-[11px] mt-0.5">
-                    Channel: {payslipModalData.record.paymentMethod || "Bank Transfer"}
+                  <div className="text-slate-600 text-[11px] mt-0.5">
+                    Channel: {payslipModalData.record.splits && payslipModalData.record.splits.length > 0 ? "SPLIT (Multi-Channel)" : (payslipModalData.record.paymentMethod || "Bank Transfer")}
                   </div>
                 </div>
               </div>
@@ -1472,7 +2250,7 @@ export function PayrollClient() {
               </div>
 
               {/* Net Disbursed Highlight */}
-              <div className="bg-slate-900 text-white rounded-xl p-4 flex items-center justify-between">
+              <div className="bg-slate-900 text-white rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div>
                   <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
                     NET SALARY DISBURSED
@@ -1480,11 +2258,43 @@ export function PayrollClient() {
                   <div className="text-2xl font-bold font-mono text-emerald-400">
                     ₹{payslipModalData.record.amountPaid.toLocaleString("en-IN")}
                   </div>
+                  <div className="text-xs text-slate-300 italic mt-0.5 font-serif">
+                    In Words: {numberToWordsRupees(payslipModalData.record.amountPaid)}
+                  </div>
                 </div>
                 <div className="text-right text-xs text-slate-400 font-mono">
-                  Account: {payslipModalData.record.accountName || "Hospital Main"}
+                  <div>Channel: {payslipModalData.record.splits && payslipModalData.record.splits.length > 0 ? "SPLIT (Multi-Channel)" : (payslipModalData.record.paymentMethod || "Bank Transfer")}</div>
+                  <div className="mt-0.5">Account: {payslipModalData.record.accountName || "Hospital Main"}</div>
                 </div>
               </div>
+
+              {/* Split Details Breakdown (if paid via SPLIT) */}
+              {payslipModalData.record.splits && payslipModalData.record.splits.length > 0 && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                    <Split className="w-4 h-4 text-indigo-600" />
+                    <span>Split Payment Breakdown</span>
+                  </div>
+                  <div className="divide-y divide-slate-200 text-xs font-mono">
+                    {payslipModalData.record.splits.map((split, i) => (
+                      <div key={i} className="py-1.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-sans">
+                          <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 font-mono font-bold text-[10px] flex items-center justify-center">
+                            {i + 1}
+                          </span>
+                          <div>
+                            <span className="font-semibold text-slate-800">{split.paymentMethod}</span>
+                            <span className="text-slate-500 text-[11px] ml-1.5">via {split.accountName}</span>
+                          </div>
+                        </div>
+                        <span className="font-bold text-slate-900">
+                          ₹{split.amount.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Sign-off Stamps */}
               <div className="pt-6 border-t border-slate-200 flex justify-between text-[11px] text-slate-500">
@@ -1493,12 +2303,21 @@ export function PayrollClient() {
                   <div className="border-t border-slate-300 pt-1 font-semibold text-slate-700">
                     Employee Signature
                   </div>
+                  <div className="text-[10px] text-slate-400">Acknowledged Receipt</div>
+                </div>
+                <div className="text-center">
+                  <div className="h-8" />
+                  <div className="border-t border-slate-300 pt-1 font-semibold text-slate-700">
+                    Accounts & Finance
+                  </div>
+                  <div className="text-[10px] text-slate-400">Verified & Posted</div>
                 </div>
                 <div className="text-right">
                   <div className="h-8" />
                   <div className="border-t border-slate-300 pt-1 font-semibold text-slate-700">
-                    Authorized Signatory (Master Finance)
+                    Authorized Signatory
                   </div>
+                  <div className="text-[10px] text-slate-400">Master Finance Division</div>
                 </div>
               </div>
             </div>

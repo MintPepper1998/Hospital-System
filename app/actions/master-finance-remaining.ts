@@ -5,6 +5,7 @@ import { hospitalAccountWhere, hospitalBillingWhere, hospitalPurchaseWhere, hosp
 import { requireAuthSafe } from "@/lib/auth-guard"
 import { revalidatePath } from "next/cache"
 import { Prisma } from "@prisma/client"
+import { getHospitalSettings } from "@/app/actions/settings"
 
 // ═══════════════════════════════════════════════════════════════════
 // PAYROLL — Salary Processing & Payroll Journal
@@ -36,7 +37,7 @@ export async function getPayrollData(params: { month?: string; year?: number }) 
   const year = params.year || now.getFullYear()
   const month = params.month || String(now.getMonth() + 1).padStart(2, "0")
 
-  const [employees, allRecords, accounts] = await Promise.all([
+  const [employees, allRecords, accounts, hospitalSettings] = await Promise.all([
     prisma.employee.findMany({
       include: {
         salaryRecords: {
@@ -63,6 +64,7 @@ export async function getPayrollData(params: { month?: string; year?: number }) 
       },
       orderBy: [{ type: "asc" }, { name: "asc" }],
     }),
+    getHospitalSettings(),
   ])
 
   // Fetch transaction details for vouchers
@@ -72,6 +74,26 @@ export async function getPayrollData(params: { month?: string; year?: number }) 
     include: { account: { select: { id: true, name: true, type: true } } },
   }) : []
   const txMap = new Map(txList.map((t) => [t.id, t]))
+
+  // Fetch all split transactions grouped by referenceId (voucher number)
+  const refIds = txList.map((t) => t.referenceId).filter((r): r is string => Boolean(r))
+  const allSplitTxs = refIds.length > 0 ? await prisma.transaction.findMany({
+    where: { referenceId: { in: refIds } },
+    include: { account: { select: { id: true, name: true, type: true } } },
+    orderBy: { createdAt: "asc" },
+  }) : []
+
+  const splitMap = new Map<string, Array<{ accountName: string; amount: number; paymentMethod: string }>>()
+  for (const stx of allSplitTxs) {
+    if (!stx.referenceId) continue
+    const list = splitMap.get(stx.referenceId) || []
+    list.push({
+      accountName: stx.account?.name || "Account",
+      amount: stx.amount,
+      paymentMethod: stx.paymentMethod,
+    })
+    splitMap.set(stx.referenceId, list)
+  }
 
   const totalBasic = employees.reduce((s, e) => s + e.basicSalary, 0)
   const totalPaid = allRecords.reduce((s, r) => s + r.amountPaid, 0)
@@ -98,6 +120,7 @@ export async function getPayrollData(params: { month?: string; year?: number }) 
     employees: employees.map((e) => {
       const rec = e.salaryRecords[0]
       const tx = rec?.transactionId ? txMap.get(rec.transactionId) : null
+      const splits = tx?.referenceId ? splitMap.get(tx.referenceId) || [] : []
       return {
         id: e.id,
         name: e.name,
@@ -113,21 +136,33 @@ export async function getPayrollData(params: { month?: string; year?: number }) 
           paymentDate: rec.paymentDate.toISOString(),
           transactionId: rec.transactionId,
           voucherNumber: tx?.referenceId || null,
-          accountName: tx?.account?.name || null,
-          paymentMethod: tx?.paymentMethod || null,
+          accountName: splits.length > 1 ? `Split Accounts (${splits.map((s) => s.accountName).join(", ")})` : (tx?.account?.name || null),
+          paymentMethod: splits.length > 1 ? "SPLIT" : (tx?.paymentMethod || null),
+          splits: splits.length > 1 ? splits : [],
         } : null,
       }
     }),
     records: allRecords.map((r) => {
       const tx = r.transactionId ? txMap.get(r.transactionId) : null
+      const splits = tx?.referenceId ? splitMap.get(tx.referenceId) || [] : []
       return {
         ...r,
         voucherNumber: tx?.referenceId || null,
-        accountName: tx?.account?.name || null,
-        paymentMethod: tx?.paymentMethod || null,
+        accountName: splits.length > 1 ? `Split Accounts (${splits.map((s) => s.accountName).join(", ")})` : (tx?.account?.name || null),
+        paymentMethod: splits.length > 1 ? "SPLIT" : (tx?.paymentMethod || null),
+        splits: splits.length > 1 ? splits : [],
       }
     }),
     accounts,
+    hospitalSettings: {
+      name: hospitalSettings.name,
+      address: hospitalSettings.address,
+      phone: hospitalSettings.phone,
+      email: hospitalSettings.email,
+      website: hospitalSettings.website,
+      gstNo: hospitalSettings.gstNo,
+      logoUrl: hospitalSettings.logoUrl,
+    },
     totalBasic,
     totalPaid,
     totalBonus,
@@ -144,13 +179,19 @@ export async function processMasterFinanceSalary(params: {
   employeeId: string
   month: string
   year: number
-  accountId: string
+  accountId?: string
   basicSalary: number
   bonus?: number
   deductions?: number
   paymentMethod?: string
   paymentDate?: string | Date
   notes?: string
+  splitPayments?: Array<{
+    accountId: string
+    paymentMethod: string
+    amount: number
+    notes?: string
+  }>
 }) {
   const session = await requireAuthSafe(["SUPER_ADMIN", "ACCOUNTANT", "ADMIN"])
   if (!session.ok) return { success: false, message: session.error }
@@ -162,6 +203,26 @@ export async function processMasterFinanceSalary(params: {
 
   if (finalAmount <= 0) {
     return { success: false, message: "Net payable salary must be greater than zero." }
+  }
+
+  const isSplit = params.paymentMethod === "SPLIT"
+  const splitItems = (params.splitPayments || []).filter((s) => (Number(s.amount) || 0) > 0)
+
+  if (isSplit) {
+    if (splitItems.length < 2) {
+      return { success: false, message: "Split payment requires at least 2 payment channel allocations with amount > 0." }
+    }
+    const totalSplit = Math.round(splitItems.reduce((sum, s) => sum + (Number(s.amount) || 0), 0) * 100) / 100
+    if (Math.abs(totalSplit - finalAmount) > 0.5) {
+      return {
+        success: false,
+        message: `Total split allocation (₹${totalSplit.toLocaleString("en-IN")}) does not match net payable amount (₹${finalAmount.toLocaleString("en-IN")}).`,
+      }
+    }
+  } else {
+    if (!params.accountId) {
+      return { success: false, message: "Please select a disbursement account." }
+    }
   }
 
   const disburseDate = parseDisbursementDate(params.paymentDate)
@@ -191,41 +252,125 @@ export async function processMasterFinanceSalary(params: {
         throw new Error(`Salary has already been processed for ${employee.name} for ${params.month}/${params.year}.`)
       }
 
-      const account = await tx.financialAccount.findFirst({
-        where: hospitalAccountWhere({ id: params.accountId, isActive: true }),
-      })
-      if (!account) {
-        throw new Error("Selected disbursement account not found or inactive")
-      }
-      if (account.currentBalance < finalAmount) {
-        throw new Error(`Insufficient funds in ${account.name}. Available: ₹${account.currentBalance.toLocaleString("en-IN")}, Required: ₹${finalAmount.toLocaleString("en-IN")}`)
-      }
-
       // 1. Generate Next Voucher Number
       const count = await tx.voucher.count({ where: { voucherType: "PAYMENT" } })
       const voucherNumber = `PV-${String(count + 1).padStart(5, "0")}`
 
-      // 2. Create Transaction
-      const transaction = await tx.transaction.create({
-        data: {
-          accountId: account.id,
-          date: disburseDate,
-          type: "EXPENSE",
-          amount: finalAmount,
-          category: "SALARY",
-          paymentMethod: params.paymentMethod || "BANK_TRANSFER",
-          scope: "HOSPITAL",
+      let primaryTxId = ""
+      const voucherEntries: Array<{
+        accountGroupCode: string
+        financialAccountId?: string
+        narration: string
+        debitAmount: number
+        creditAmount: number
+      }> = [
+        {
           accountGroupCode: "EXPENSES",
-          referenceId: voucherNumber,
-          description: `Salary disbursement for ${employee.name} (${params.month}/${params.year}) on ${disburseDateStr}${params.notes ? ` - ${params.notes}` : ""} [Voucher: ${voucherNumber}]`,
+          narration: `Salary & Wages Expense - ${employee.name} (${params.month}/${params.year})`,
+          debitAmount: finalAmount,
+          creditAmount: 0,
         },
-      })
+      ]
+      let narrationSummary = ""
 
-      // 3. Deduct from financial account
-      await tx.financialAccount.update({
-        where: { id: account.id },
-        data: { currentBalance: { decrement: finalAmount } },
-      })
+      if (isSplit) {
+        // Verify balances for all accounts
+        for (const item of splitItems) {
+          const acc = await tx.financialAccount.findFirst({
+            where: hospitalAccountWhere({ id: item.accountId, isActive: true }),
+          })
+          if (!acc) throw new Error("Selected disbursement account not found or inactive in split row")
+          if (acc.currentBalance < item.amount) {
+            throw new Error(`Insufficient funds in ${acc.name}. Required: ₹${item.amount.toLocaleString("en-IN")}, Available: ₹${acc.currentBalance.toLocaleString("en-IN")}`)
+          }
+        }
+
+        const splitDescriptions: string[] = []
+
+        for (let i = 0; i < splitItems.length; i++) {
+          const item = splitItems[i]
+          const acc = await tx.financialAccount.findFirst({
+            where: hospitalAccountWhere({ id: item.accountId, isActive: true }),
+          })
+
+          const txRecord = await tx.transaction.create({
+            data: {
+              accountId: item.accountId,
+              date: disburseDate,
+              type: "EXPENSE",
+              amount: item.amount,
+              category: "SALARY",
+              paymentMethod: item.paymentMethod || "SPLIT",
+              scope: "HOSPITAL",
+              accountGroupCode: "EXPENSES",
+              referenceId: voucherNumber,
+              description: `Salary disbursement for ${employee.name} (${params.month}/${params.year}) [Split ${item.paymentMethod}: ₹${item.amount.toLocaleString("en-IN")} via ${acc?.name}]${params.notes ? ` - ${params.notes}` : ""} [Voucher: ${voucherNumber}]`,
+            },
+          })
+
+          if (i === 0) primaryTxId = txRecord.id
+
+          // Deduct from financial account
+          await tx.financialAccount.update({
+            where: { id: item.accountId },
+            data: { currentBalance: { decrement: item.amount } },
+          })
+
+          voucherEntries.push({
+            accountGroupCode: "ASSETS",
+            financialAccountId: item.accountId,
+            narration: `Paid via ${item.paymentMethod} from ${acc?.name}`,
+            debitAmount: 0,
+            creditAmount: item.amount,
+          })
+
+          splitDescriptions.push(`${item.paymentMethod}: ₹${item.amount.toLocaleString("en-IN")} (${acc?.name})`)
+        }
+
+        narrationSummary = `Split Payment: ${splitDescriptions.join(", ")}`
+      } else {
+        const account = await tx.financialAccount.findFirst({
+          where: hospitalAccountWhere({ id: params.accountId!, isActive: true }),
+        })
+        if (!account) {
+          throw new Error("Selected disbursement account not found or inactive")
+        }
+        if (account.currentBalance < finalAmount) {
+          throw new Error(`Insufficient funds in ${account.name}. Available: ₹${account.currentBalance.toLocaleString("en-IN")}, Required: ₹${finalAmount.toLocaleString("en-IN")}`)
+        }
+
+        const txRecord = await tx.transaction.create({
+          data: {
+            accountId: account.id,
+            date: disburseDate,
+            type: "EXPENSE",
+            amount: finalAmount,
+            category: "SALARY",
+            paymentMethod: params.paymentMethod || "BANK_TRANSFER",
+            scope: "HOSPITAL",
+            accountGroupCode: "EXPENSES",
+            referenceId: voucherNumber,
+            description: `Salary disbursement for ${employee.name} (${params.month}/${params.year}) on ${disburseDateStr}${params.notes ? ` - ${params.notes}` : ""} [Voucher: ${voucherNumber}]`,
+          },
+        })
+
+        primaryTxId = txRecord.id
+
+        await tx.financialAccount.update({
+          where: { id: account.id },
+          data: { currentBalance: { decrement: finalAmount } },
+        })
+
+        voucherEntries.push({
+          accountGroupCode: "ASSETS",
+          financialAccountId: account.id,
+          narration: `Paid from ${account.name} (${account.type})`,
+          debitAmount: 0,
+          creditAmount: finalAmount,
+        })
+
+        narrationSummary = `Paid via ${params.paymentMethod || "BANK_TRANSFER"} from ${account.name}`
+      }
 
       // 4. Create SalaryRecord with specified payment date
       const salaryRecord = await tx.salaryRecord.create({
@@ -238,7 +383,7 @@ export async function processMasterFinanceSalary(params: {
           deductions,
           paymentDate: disburseDate,
           status: "PAID",
-          transactionId: transaction.id,
+          transactionId: primaryTxId,
         },
       })
 
@@ -248,26 +393,12 @@ export async function processMasterFinanceSalary(params: {
           voucherNumber,
           voucherType: "PAYMENT",
           date: disburseDate,
-          narration: `Payroll disbursement to ${employee.name} (${employee.department || "General"} - ${employee.role}) for period ${params.month}/${params.year} on ${disburseDateStr}. Base: ₹${basicSalary.toLocaleString("en-IN")}, Bonus: ₹${bonus.toLocaleString("en-IN")}, Deductions: ₹${deductions.toLocaleString("en-IN")}. Paid via ${account.name}.${params.notes ? ` Notes: ${params.notes}` : ""}`,
+          narration: `Payroll disbursement to ${employee.name} (${employee.department || "General"} - ${employee.role}) for period ${params.month}/${params.year} on ${disburseDateStr}. Base: ₹${basicSalary.toLocaleString("en-IN")}, Bonus: ₹${bonus.toLocaleString("en-IN")}, Deductions: ₹${deductions.toLocaleString("en-IN")}. ${narrationSummary}.${params.notes ? ` Notes: ${params.notes}` : ""}`,
           totalAmount: finalAmount,
           status: "POSTED",
           createdBy: session.session.name || "Finance Officer",
           entries: {
-            create: [
-              {
-                accountGroupCode: "EXPENSES",
-                narration: `Salary & Wages Expense - ${employee.name} (${params.month}/${params.year})`,
-                debitAmount: finalAmount,
-                creditAmount: 0,
-              },
-              {
-                accountGroupCode: "ASSETS",
-                financialAccountId: account.id,
-                narration: `Paid from ${account.name} (${account.type})`,
-                debitAmount: 0,
-                creditAmount: finalAmount,
-              },
-            ],
+            create: voucherEntries,
           },
         },
       })

@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { User, Loader2, ShieldCheck, CheckSquare, Search } from "lucide-react"
+import { User, Loader2, ShieldCheck, CheckSquare, Search, FileSignature, Eye, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { updateStaff } from "@/app/actions/staff"
+import { uploadSignature, removeSignature } from "@/app/actions/signature"
 import { getPresignedUrl } from "@/app/actions/upload"
 import { AVAILABLE_MODULES, ROLE_DEFAULT_PERMISSIONS } from "@/lib/permissions"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -44,9 +45,13 @@ export function EditStaffDialog({
   
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null)
   const [idCardFile, setIdCardFile] = useState<File | null>(null)
+  const [signatureFile, setSignatureFile] = useState<File | null>(null)
   
   const [removeProfilePhoto, setRemoveProfilePhoto] = useState(false)
   const [removeIdCard, setRemoveIdCard] = useState(false)
+  const [removeSignatureFile, setRemoveSignatureFile] = useState(false)
+  const [currentSignature, setCurrentSignature] = useState<string | null>(null)
+  const [viewSignatureOpen, setViewSignatureOpen] = useState(false)
   
   const [form, setForm] = useState({
     id: "",
@@ -81,8 +86,11 @@ export function EditStaffDialog({
       })
       setProfilePhoto(null)
       setIdCardFile(null)
+      setSignatureFile(null)
       setRemoveProfilePhoto(false)
       setRemoveIdCard(false)
+      setRemoveSignatureFile(false)
+      setCurrentSignature(staff.signatureUrl || staff.user?.signatureUrl || null)
     }
   }, [staff, open])
 
@@ -167,6 +175,25 @@ export function EditStaffDialog({
         idCardUrl = pre.publicUrl
       } else if (removeIdCard) {
         idCardUrl = ""
+      }
+
+      // Process and reform signature if uploaded or removed
+      if (signatureFile) {
+        const sigData = new FormData()
+        sigData.append("file", signatureFile)
+        sigData.append("staffId", form.id)
+        if (staff.userId || staff.user?.id) {
+          sigData.append("userId", staff.userId || staff.user.id)
+        }
+        const sigRes = await uploadSignature(sigData)
+        if (!sigRes.success) {
+          toast.error("Signature processing: " + sigRes.message)
+        }
+      } else if (removeSignatureFile) {
+        await removeSignature({
+          staffId: form.id,
+          userId: staff.userId || staff.user?.id,
+        })
       }
 
       startTransition(async () => {
@@ -466,6 +493,75 @@ export function EditStaffDialog({
             </div>
           </div>
 
+          {/* Digital Signature Row */}
+          <div className="pt-3 border-t space-y-2">
+            <Label className="text-xs font-semibold flex items-center gap-1.5 text-slate-800">
+              <FileSignature className="h-4 w-4 text-indigo-600" />
+              Digital Signature (Reforms any image to standard PNG • Never deleted automatically)
+            </Label>
+
+            {currentSignature && !removeSignatureFile && !signatureFile ? (
+              <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white p-1 rounded border border-slate-200 max-w-[130px] flex items-center justify-center">
+                    <img src={currentSignature} alt="Current Signature" className="max-h-7 max-w-full object-contain" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-slate-800">Active Signature Attached</p>
+                    <p className="text-[10px] text-muted-foreground">Standardized PNG</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs px-2.5 gap-1"
+                    onClick={() => setViewSignatureOpen(true)}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => setRemoveSignatureFile(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    setSignatureFile(e.target.files?.[0] || null)
+                    setRemoveSignatureFile(false)
+                  }}
+                />
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>Upload any image of signature (even paper phone photo) — system reforms it to PNG on save.</span>
+                  {removeSignatureFile && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-[11px] text-blue-600"
+                      onClick={() => setRemoveSignatureFile(false)}
+                    >
+                      Undo Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <DialogFooter className="pt-2">
             <Button
               type="button"
@@ -484,6 +580,36 @@ export function EditStaffDialog({
             </Button>
           </DialogFooter>
         </form>
+
+        {/* View Full Signature Modal */}
+        <Dialog open={viewSignatureOpen} onOpenChange={setViewSignatureOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <FileSignature className="h-5 w-5 text-indigo-600" />
+                Employee Signature Preview
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Official signature for {staff?.user?.name || "Staff Member"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="p-6 bg-slate-100 rounded-lg flex items-center justify-center my-2 border border-slate-200">
+              {currentSignature && (
+                <img
+                  src={currentSignature}
+                  alt="Staff Signature"
+                  className="max-h-40 max-w-full object-contain bg-white p-3 rounded shadow-sm"
+                />
+              )}
+            </div>
+            <DialogFooter className="sm:justify-between items-center">
+              <span className="text-[11px] text-slate-400">Reformed Standard PNG • Max 450×150 px</span>
+              <Button variant="outline" size="sm" onClick={() => setViewSignatureOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   )

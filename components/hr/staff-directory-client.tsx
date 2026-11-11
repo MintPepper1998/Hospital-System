@@ -56,8 +56,10 @@ import {
   Trash2,
   Plus,
   Settings2,
+  FileSignature,
 } from "lucide-react"
 import { createStaff, toggleStaffStatus, updateStaff, deleteStaff, addHRDepartment, renameHRDepartment, deleteHRDepartment } from "@/app/actions/staff"
+import { uploadSignature } from "@/app/actions/signature"
 import { toggleEmployeeLeave } from "@/lib/actions/hr"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -86,6 +88,7 @@ interface StaffMember {
   leaveReason: string | null
   joiningDate: string
   idCardImage: string | null
+  signatureUrl?: string | null
   user: {
     id: string
     name: string | null
@@ -93,6 +96,7 @@ interface StaffMember {
     role: string
     isActive: boolean
     image: string | null
+    signatureUrl?: string | null
   }
 }
 
@@ -316,6 +320,8 @@ function StaffCard({ employee: emp, router, temporaryPermissions = [], departmen
     .join("")
     .toUpperCase()
     .slice(0, 2)
+
+  const sigUrl = emp.signatureUrl || emp.user?.signatureUrl
 
   const handleToggleStatus = () => {
     startTransition(async () => {
@@ -555,10 +561,16 @@ function StaffCard({ employee: emp, router, temporaryPermissions = [], departmen
               <span>Consultation: ₹{emp.consultationFee}</span>
             </div>
           )}
+          {sigUrl && (
+            <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50/80 px-2 py-0.5 rounded border border-emerald-200/80 w-fit">
+              <FileSignature className="h-3 w-3 text-emerald-600" />
+              <span className="text-[10px] font-medium">Digital Signature On File</span>
+            </div>
+          )}
         </div>
         
         {/* Show Documents Button */}
-        {(emp.user.image || emp.idCardImage) && (
+        {(emp.user.image || emp.idCardImage || sigUrl) && (
           <div className="mt-4 pt-3 border-t">
             <Button
               variant="outline"
@@ -592,7 +604,9 @@ function StaffCard({ employee: emp, router, temporaryPermissions = [], departmen
                 contentArea.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:1rem;padding:2rem;overflow-y:auto;align-items:center;'
                 
                 const addDoc = (url: string, label: string) => {
-                  const secureUrl = `/api/documents/view?fileUrl=${encodeURIComponent(url)}`
+                  const secureUrl = url.startsWith('data:') || url.startsWith('/api/') || url.startsWith('/') 
+                    ? url 
+                    : `/api/documents/view?fileUrl=${encodeURIComponent(url)}`
 
                   const wrapper = document.createElement('div')
                   wrapper.style.cssText = 'background:white;padding:1rem;border-radius:8px;width:100%;max-width:800px;display:flex;flex-direction:column;gap:0.5rem;'
@@ -659,6 +673,7 @@ function StaffCard({ employee: emp, router, temporaryPermissions = [], departmen
 
                 if (emp.idCardImage) addDoc(emp.idCardImage, 'ID Card / Document')
                 if (emp.user.image) addDoc(emp.user.image, 'Profile Photo')
+                if (sigUrl) addDoc(sigUrl, 'Digital Signature (Standardized PNG)')
 
                 overlay.appendChild(toolbar)
                 overlay.appendChild(contentArea)
@@ -714,6 +729,7 @@ function AddStaffDialog({
 
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null)
   const [idCardFile, setIdCardFile] = useState<File | null>(null)
+  const [signatureFile, setSignatureFile] = useState<File | null>(null)
 
   const isDoctor = form.role === "DOCTOR"
   const [permSearch, setPermSearch] = useState("")
@@ -754,6 +770,7 @@ function AddStaffDialog({
     setShowPassword(false)
     setProfilePhoto(null)
     setIdCardFile(null)
+    setSignatureFile(null)
     setPermSearch("")
   }
 
@@ -843,6 +860,18 @@ function AddStaffDialog({
         })
 
         if (result.success) {
+          if (signatureFile && result.data?.id) {
+            const sigData = new FormData()
+            sigData.append("file", signatureFile)
+            sigData.append("staffId", result.data.id)
+            if (result.data.userId) {
+              sigData.append("userId", result.data.userId)
+            }
+            const sigRes = await uploadSignature(sigData)
+            if (!sigRes.success) {
+              toast.error("Signature processing: " + sigRes.message)
+            }
+          }
           toast.success(result.message)
           resetForm()
           onSuccess()
@@ -1147,7 +1176,7 @@ function AddStaffDialog({
           )}
 
           {/* Document Uploads */}
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t">
             <div className="space-y-2">
               <Label className="text-xs font-semibold">Profile Photo</Label>
               <Input type="file" accept="image/*" onChange={(e) => setProfilePhoto(e.target.files?.[0] || null)} />
@@ -1155,6 +1184,18 @@ function AddStaffDialog({
             <div className="space-y-2">
               <Label className="text-xs font-semibold">ID Card (Image/PDF)</Label>
               <Input type="file" accept="image/*,application/pdf" onChange={(e) => setIdCardFile(e.target.files?.[0] || null)} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <FileSignature className="h-3.5 w-3.5 text-indigo-600" />
+                Digital Signature
+              </Label>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setSignatureFile(e.target.files?.[0] || null)}
+              />
+              <p className="text-[10px] text-muted-foreground">Auto-reformed to PNG • Permanent</p>
             </div>
           </div>
 

@@ -33,6 +33,7 @@ export async function getMyProfile() {
       name: user.name,
       email: user.email,
       image: user.image ? await getSecureUrl(user.image) : null,
+      signatureUrl: user.signatureUrl || user.staff?.signatureUrl || null,
       role: user.role,
       hasPassword: !!user.password,
       createdAt: user.createdAt.toISOString(),
@@ -44,6 +45,7 @@ export async function getMyProfile() {
             department: user.staff.department,
             designation: user.staff.designation,
             specialization: user.staff.specialization,
+            signatureUrl: user.staff.signatureUrl || user.signatureUrl || null,
             joiningDate: user.staff.joiningDate.toISOString(),
           }
         : null,

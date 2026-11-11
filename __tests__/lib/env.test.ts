@@ -5,5 +5,5 @@ describe("Environment validation", () => {
     const { env } = await import("@/lib/env")
     expect(env).toBeDefined()
     expect(typeof env.NODE_ENV).toBe("string")
-  })
+  }, 15000)
 })

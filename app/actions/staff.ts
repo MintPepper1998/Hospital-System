@@ -25,6 +25,7 @@ interface CreateStaffInput {
   licenseNumber?: string
   image?: string
   idCardImage?: string
+  signatureUrl?: string
   permissions?: string[]
 }
 
@@ -83,6 +84,7 @@ export async function createStaff(data: CreateStaffInput) {
           isActive: true,
           permissions: data.permissions || [],
           image: data.image || null,
+          signatureUrl: data.signatureUrl || null,
         },
       })
 
@@ -98,6 +100,7 @@ export async function createStaff(data: CreateStaffInput) {
           basicSalary: data.basicSalary ?? null,
           licenseNumber: data.licenseNumber?.trim() || null,
           idCardImage: data.idCardImage || null,
+          signatureUrl: data.signatureUrl || null,
           joiningDate: new Date(),
         },
         include: { user: true },
@@ -116,6 +119,7 @@ export async function createStaff(data: CreateStaffInput) {
     return {
       success: true,
       message: `${data.name} has been added as ${data.role.replace("_", " ")}. Employee ID: ${result.employeeId}`,
+      data: { id: result.id, userId: result.userId, employeeId: result.employeeId },
     }
   } catch (error: any) {
     console.error("[ERROR] createStaff:", error)
@@ -144,6 +148,7 @@ export async function getStaffList() {
             role: true,
             isActive: true,
             image: true,
+            signatureUrl: true,
             permissions: true,
           },
         },
@@ -248,6 +253,7 @@ export interface UpdateStaffInput {
   password?: string
   image?: string
   idCardImage?: string
+  signatureUrl?: string
 }
 
 export async function updateStaff(data: UpdateStaffInput) {
@@ -279,6 +285,10 @@ export async function updateStaff(data: UpdateStaffInput) {
         userUpdateData.image = data.image || null
       }
 
+      if (data.signatureUrl !== undefined) {
+        userUpdateData.signatureUrl = data.signatureUrl || null
+      }
+
       if (data.password && data.password.trim() !== "") {
         if (data.password.length < 6) throw new Error("Password must be at least 6 characters")
         userUpdateData.password = await bcrypt.hash(data.password, 10)
@@ -302,6 +312,10 @@ export async function updateStaff(data: UpdateStaffInput) {
 
       if (data.idCardImage !== undefined) {
         staffUpdateData.idCardImage = data.idCardImage || null
+      }
+
+      if (data.signatureUrl !== undefined) {
+        staffUpdateData.signatureUrl = data.signatureUrl || null
       }
 
       await tx.staff.update({

@@ -47,6 +47,7 @@ export default async function StaffDirectoryPage() {
     leaveReason: emp.leaveReason,
     joiningDate: emp.joiningDate.toISOString(),
     idCardImage: emp.idCardImage,
+    signatureUrl: emp.signatureUrl || emp.user.signatureUrl || null,
     user: {
       id: emp.user.id,
       name: emp.user.name,
@@ -54,6 +55,7 @@ export default async function StaffDirectoryPage() {
       role: emp.user.role,
       isActive: emp.user.isActive,
       image: emp.user.image,
+      signatureUrl: emp.user.signatureUrl || emp.signatureUrl || null,
       permissions: emp.user.permissions || [],
     },
   }))

@@ -23,9 +23,22 @@ import {
   IdCard,
   Camera,
   Upload,
+  FileSignature,
+  Trash2,
+  Maximize2,
+  Sparkles,
 } from "lucide-react"
 import { updateProfile, changePassword } from "@/app/actions/user-profile"
+import { uploadSignature, removeSignature } from "@/app/actions/signature"
 import { getPresignedUrl } from "@/app/actions/upload"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
@@ -39,6 +52,7 @@ interface ProfileData {
   name: string | null
   email: string
   image: string | null
+  signatureUrl?: string | null
   role: string
   hasPassword: boolean
   createdAt: string
@@ -49,6 +63,7 @@ interface ProfileData {
     department: string | null
     designation: string | null
     specialization: string | null
+    signatureUrl?: string | null
     joiningDate: string
   } | null
 }
@@ -80,6 +95,7 @@ export function ProfileClient({ profile }: ProfileClientProps) {
   return (
     <div className="space-y-6">
       <MyDetailsCard profile={profile} />
+      <SignatureCard profile={profile} />
       <SecurityCard profile={profile} />
     </div>
   )
@@ -458,6 +474,269 @@ function SecurityCard({ profile }: { profile: ProfileData }) {
             )}
           </Button>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================
+// CARD: DIGITAL SIGNATURE
+// ============================================
+
+function SignatureCard({ profile }: { profile: ProfileData }) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(
+    profile.signatureUrl || profile.staff?.signatureUrl || null
+  )
+  const [isUploading, setIsUploading] = useState(false)
+  const [viewDialogOpen, setViewDialogOpen] = useState(false)
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false)
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith("image/") && !file.name.match(/\.(png|jpe?g|webp|gif|svg|bmp|tiff|heic)$/i)) {
+      toast.error("Please select a valid image file (PNG, JPG, WEBP, etc.)")
+      return
+    }
+
+    const formData = new FormData()
+    formData.append("file", file)
+    if (profile.staff?.id) {
+      formData.append("staffId", profile.staff.id)
+    }
+    formData.append("userId", profile.id)
+
+    setIsUploading(true)
+    const toastId = toast.loading("Processing & reforming signature into professional PNG standard...")
+
+    try {
+      const res = await uploadSignature(formData)
+      if (res.success && res.signatureUrl) {
+        setSignatureUrl(res.signatureUrl)
+        toast.success(res.message, { id: toastId })
+        router.refresh()
+      } else {
+        toast.error(res.message || "Failed to upload signature", { id: toastId })
+      }
+    } catch (err: any) {
+      toast.error(err.message || "An error occurred during upload", { id: toastId })
+    } finally {
+      setIsUploading(false)
+      e.target.value = ""
+    }
+  }
+
+  const handleRemove = () => {
+    startTransition(async () => {
+      try {
+        const res = await removeSignature({
+          staffId: profile.staff?.id,
+          userId: profile.id,
+        })
+        if (res.success) {
+          setSignatureUrl(null)
+          setConfirmRemoveOpen(false)
+          toast.success("Signature removed successfully")
+          router.refresh()
+        } else {
+          toast.error(res.message || "Failed to remove signature")
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Failed to remove signature")
+      }
+    })
+  }
+
+  return (
+    <Card className="border border-slate-200 shadow-sm overflow-hidden">
+      <CardHeader className="pb-3 border-b bg-gradient-to-r from-slate-50 to-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
+              <FileSignature className="h-5 w-5 text-indigo-600" />
+              Digital Signature
+            </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+              Official digital signature for clinical orders, prescriptions, reports, and administrative approvals.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {signatureUrl ? (
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs gap-1 font-medium">
+                <CheckCircle2 className="h-3 w-3" />
+                Active • Permanent PNG
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                Not Uploaded
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="pt-5 space-y-4">
+        {signatureUrl ? (
+          <div className="space-y-4">
+            <div className="relative group bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-300">
+              <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 flex items-center justify-center max-w-full">
+                <img
+                  src={signatureUrl}
+                  alt="Employee Signature"
+                  className="max-h-24 max-w-[320px] object-contain drop-shadow-sm select-none"
+                />
+              </div>
+
+              <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
+                <span>Reformed to Professional PNG (Max 450×150 px) • Never deleted automatically</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setViewDialogOpen(true)}
+                className="text-xs gap-1.5"
+              >
+                <Maximize2 className="h-3.5 w-3.5 text-slate-600" />
+                View Full Size
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmRemoveOpen(true)}
+                  disabled={isUploading || isPending}
+                  className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 gap-1.5"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Remove
+                </Button>
+
+                <label>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleUpload}
+                    disabled={isUploading || isPending}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isUploading || isPending}
+                    asChild
+                    className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer gap-1.5"
+                  >
+                    <span>
+                      {isUploading ? (
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Reforming...</>
+                      ) : (
+                        <><Upload className="h-3.5 w-3.5 mr-1" /> Change Signature</>
+                      )}
+                    </span>
+                  </Button>
+                </label>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center bg-slate-50/50 hover:bg-slate-50 transition-colors">
+            <div className="mx-auto w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 mb-3">
+              <FileSignature className="h-6 w-6" />
+            </div>
+            <h4 className="text-sm font-semibold text-slate-800">No Signature Uploaded Yet</h4>
+            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-4 leading-relaxed">
+              Upload any picture of your signature (even a phone camera photo of paper). The system automatically trims the margins, enhances contrast, and reforms it to a standardized, permanent PNG.
+            </p>
+
+            <label className="inline-block">
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={handleUpload}
+                disabled={isUploading}
+              />
+              <Button
+                type="button"
+                disabled={isUploading}
+                asChild
+                className="bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer gap-2 text-xs"
+              >
+                <span>
+                  {isUploading ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Processing & Reforming...</>
+                  ) : (
+                    <><Upload className="h-4 w-4" /> Upload Signature</>
+                  )}
+                </span>
+              </Button>
+            </label>
+          </div>
+        )}
+
+        {/* View Full Size Dialog */}
+        <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <FileSignature className="h-5 w-5 text-indigo-600" />
+                Employee Signature Preview
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Official signature of {profile.name || "Employee"} (Standardized PNG Format)
+              </DialogDescription>
+            </DialogHeader>
+            <div className="p-6 bg-slate-100 rounded-lg flex items-center justify-center my-2 border border-slate-200">
+              {signatureUrl && (
+                <img
+                  src={signatureUrl}
+                  alt="Full Signature"
+                  className="max-h-48 max-w-full object-contain bg-white p-4 rounded shadow-sm"
+                />
+              )}
+            </div>
+            <DialogFooter className="sm:justify-between items-center">
+              <span className="text-[11px] text-slate-400">Target size: 450 × 150 px PNG</span>
+              <Button variant="outline" size="sm" onClick={() => setViewDialogOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Remove Confirmation Dialog */}
+        <Dialog open={confirmRemoveOpen} onOpenChange={setConfirmRemoveOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-base text-red-600 flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-red-600" />
+                Remove Signature?
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                This will delete your stored digital signature. You can re-upload a new signature anytime.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:justify-end">
+              <Button variant="outline" size="sm" onClick={() => setConfirmRemoveOpen(false)} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button variant="destructive" size="sm" onClick={handleRemove} disabled={isPending}>
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Confirm Remove
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   )

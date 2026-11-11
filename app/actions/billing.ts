@@ -564,14 +564,18 @@ export async function calculateFinalBill(
     const totalAmountPaid = (isDepositBilled ? 0 : advanceDeposit) + totalPaidViaPayments
     
     // Fetch any split transactions if split amounts were stored only in Transaction table
-    const splitPaymentIdsWithoutCols = paymentRecords
-      .filter(p => p.paymentMethod === "SPLIT" && !p.splitCashAmount && !p.splitUpiAmount && !p.splitCardAmount)
-      .map(p => p.id)
+    const splitPaymentRecordsWithoutCols = paymentRecords.filter(
+      p => p.paymentMethod === "SPLIT" && !p.splitCashAmount && !p.splitUpiAmount && !p.splitCardAmount
+    )
+    const splitRefIds = Array.from(new Set([
+      ...splitPaymentRecordsWithoutCols.map(p => p.id),
+      ...splitPaymentRecordsWithoutCols.map(p => p.billNumber).filter(Boolean) as string[],
+    ]))
 
     const fallbackSplitMap = new Map<string, { cash?: number; upi?: number; card?: number }>()
-    if (splitPaymentIdsWithoutCols.length > 0) {
+    if (splitRefIds.length > 0) {
       const splitTxs = await prisma.transaction.findMany({
-        where: { referenceId: { in: splitPaymentIdsWithoutCols } }
+        where: { referenceId: { in: splitRefIds } }
       })
       for (const st of splitTxs) {
         if (!st.referenceId) continue
@@ -586,12 +590,31 @@ export async function calculateFinalBill(
     const payments: BillBreakdown["payments"] = paymentRecords.map(p => {
       let splitDetails: { cash?: number; upi?: number; card?: number } | null = null
       if (p.paymentMethod === "SPLIT" || p.splitCashAmount || p.splitUpiAmount || p.splitCardAmount) {
-        const fallback = fallbackSplitMap.get(p.id)
+        const fallback = fallbackSplitMap.get(p.id) || (p.billNumber ? fallbackSplitMap.get(p.billNumber) : undefined)
         const cash = (p.splitCashAmount ?? fallback?.cash) || undefined
         const upi = (p.splitUpiAmount ?? fallback?.upi) || undefined
         const card = (p.splitCardAmount ?? fallback?.card) || undefined
         if (cash || upi || card) {
           splitDetails = { cash, upi, card }
+        }
+      }
+
+      // Fallback: parse split details from notes if not present yet
+      if (!splitDetails && p.notes) {
+        const cashM = p.notes.match(/Cash:\s*₹?([\d,.]+)/i)
+        const upiM = p.notes.match(/UPI:\s*₹?([\d,.]+)/i)
+        const cardM = p.notes.match(/Card:\s*₹?([\d,.]+)/i)
+        if (cashM || upiM || cardM) {
+          const cashVal = cashM ? parseFloat(cashM[1].replace(/,/g, "")) : undefined
+          const upiVal = upiM ? parseFloat(upiM[1].replace(/,/g, "")) : undefined
+          const cardVal = cardM ? parseFloat(cardM[1].replace(/,/g, "")) : undefined
+          if (cashVal || upiVal || cardVal) {
+            splitDetails = {
+              cash: cashVal,
+              upi: upiVal,
+              card: cardVal,
+            }
+          }
         }
       }
 

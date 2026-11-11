@@ -378,14 +378,74 @@ export default async function PrintBillPage(props: {
           
           {/* Payment History */}
           {b.payments?.length > 0 && (
-            <div className="pt-2 border-t border-gray-200">
-              <div className="font-bold mb-1">Payment History</div>
-              {b.payments.map((p, i) => (
-                <div key={i} className="flex justify-between text-gray-600 py-0.5">
-                  <span>{format(new Date(p.date), "dd MMM yyyy")} — {p.mode}{p.notes ? ` (${p.notes})` : ""}</span>
-                  <span>- ₹{p.amount?.toLocaleString("en-IN")}</span>
-                </div>
-              ))}
+            <div className="pt-2.5 border-t border-gray-200 space-y-1">
+              <div className="font-bold text-gray-900 uppercase text-[11px] tracking-wider mb-1">
+                Payment History
+              </div>
+              {b.payments.map((p, i) => {
+                const isSplit = p.mode === "SPLIT" || Boolean(p.splitDetails)
+                const splitParts: { label: string; amount: number }[] = []
+                if (p.splitDetails?.cash && p.splitDetails.cash > 0) {
+                  splitParts.push({ label: "Cash", amount: p.splitDetails.cash })
+                }
+                if (p.splitDetails?.upi && p.splitDetails.upi > 0) {
+                  splitParts.push({ label: "UPI", amount: p.splitDetails.upi })
+                }
+                if (p.splitDetails?.card && p.splitDetails.card > 0) {
+                  splitParts.push({ label: "Card", amount: p.splitDetails.card })
+                }
+
+                // Fallback: parse split amounts from notes if splitDetails is empty
+                if (isSplit && splitParts.length === 0 && p.notes) {
+                  const cashM = p.notes.match(/Cash:\s*₹?([\d,.]+)/i)
+                  const upiM = p.notes.match(/UPI:\s*₹?([\d,.]+)/i)
+                  const cardM = p.notes.match(/Card:\s*₹?([\d,.]+)/i)
+                  if (cashM) splitParts.push({ label: "Cash", amount: parseFloat(cashM[1].replace(/,/g, "")) })
+                  if (upiM) splitParts.push({ label: "UPI", amount: parseFloat(upiM[1].replace(/,/g, "")) })
+                  if (cardM) splitParts.push({ label: "Card", amount: parseFloat(cardM[1].replace(/,/g, "")) })
+                }
+
+                // Clean notes if notes only repeats the split description
+                const cleanNotes = p.notes && !p.notes.toLowerCase().includes("split (") ? p.notes : null
+
+                return (
+                  <div key={i} className="py-1 border-b border-gray-100 last:border-b-0 text-xs">
+                    <div className="flex justify-between items-center text-gray-700">
+                      <div>
+                        <span className="font-medium text-gray-900">
+                          {format(new Date(p.date), "dd MMM yyyy")}
+                        </span>
+                        <span className="text-gray-400 mx-1.5">—</span>
+                        <span className={isSplit ? "font-bold text-black uppercase tracking-wide" : "font-medium text-gray-800"}>
+                          {isSplit ? "SPLIT" : p.mode}
+                        </span>
+                        {cleanNotes ? <span className="text-gray-500 font-normal italic ml-1">({cleanNotes})</span> : null}
+                      </div>
+                      <span className="font-semibold text-gray-900">
+                        - ₹{p.amount?.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+
+                    {/* Split Mode Breakdown */}
+                    {isSplit && splitParts.length > 0 && (
+                      <div className="flex items-center gap-2 pl-3 mt-1 text-[11px] text-gray-600 font-medium">
+                        <span className="text-gray-400">↳ Split Breakdown:</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {splitParts.map((sp, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 border border-gray-200 text-gray-900"
+                            >
+                              <span className="text-gray-500 font-normal mr-1">{sp.label}:</span>
+                              <span className="font-bold">₹{sp.amount.toLocaleString("en-IN")}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 

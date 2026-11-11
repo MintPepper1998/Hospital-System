@@ -109,6 +109,14 @@ export async function createIPDCharge(formData: FormData) {
 
     revalidatePath(`/dashboard/finance/ipd-billing/${admissionId}`)
     revalidatePath(`/dashboard/ipd/patient/${admissionId}`)
+    revalidatePath("/dashboard/billing-counter/ipd")
+    revalidatePath("/dashboard/ipd")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
+    revalidatePath("/dashboard/ipd/print/bill")
     
     return { success: true }
   } catch (error: any) {
@@ -217,6 +225,14 @@ export async function recordIPDPayment(formData: FormData) {
 
     revalidatePath(`/dashboard/finance/ipd-billing/${admissionId}`)
     revalidatePath(`/dashboard/ipd/patient/${admissionId}`)
+    revalidatePath("/dashboard/billing-counter/ipd")
+    revalidatePath("/dashboard/ipd")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
+    revalidatePath("/dashboard/ipd/print/bill")
     
     return { success: true }
   } catch (error: any) {

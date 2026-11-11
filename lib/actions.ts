@@ -540,6 +540,11 @@ export async function createAppointment(
     // in the dialog is a secondary UX refresh only and must NOT be relied upon.
     revalidatePath("/dashboard/clinical/opd")
     revalidatePath("/dashboard/finance/billing")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
 
     writeAuditLog({ userId: authResult.session.userId, action: "CREATE", module: "Appointment", recordId: result.appointment.id, changes: { patientId, doctorId, billNumber, grandTotal } })
 
@@ -659,6 +664,11 @@ export async function cancelOPDAppointment(appointmentId: string) {
 
     revalidatePath("/dashboard/clinical/opd")
     revalidatePath("/dashboard/finance/billing")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
     revalidatePath("/dashboard/finance/credit")
     revalidatePath("/dashboard/finance")
 
@@ -840,6 +850,11 @@ export async function billAndMarkArrived(
 
     revalidatePath("/dashboard/clinical/opd")
     revalidatePath("/dashboard/finance/billing")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
 
     writeAuditLog({ userId: authResult.session.userId, action: "PROCESS", module: "OPDBilling", recordId: appointmentId, changes: { billNumber } })
 
@@ -2580,6 +2595,11 @@ export async function createSmartInvoice(data: {
     revalidatePath("/dashboard/finance/billing")
     revalidatePath("/dashboard/laboratory")
     revalidatePath("/dashboard/pharmacy/inventory")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
 
     return {
       success: true,
@@ -3372,6 +3392,12 @@ export async function scheduleSurgery(formData: FormData) {
 
     revalidatePath("/dashboard/clinical/ot")
     revalidatePath("/dashboard/admin/ot-management")
+    revalidatePath("/dashboard/finance/billing")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
 
     const statusLabel = paymentStatus === "CASHLESS" ? " (BSKY Cashless)" : paymentStatus === "PAID" ? " (Payment Collected)" : " (Draft - Payment Pending)"
 
@@ -3479,6 +3505,12 @@ export async function updateSurgeryStatus(formData: FormData) {
 
     revalidatePath("/dashboard/clinical/ot")
     revalidatePath("/dashboard/admin/ot-management")
+    revalidatePath("/dashboard/finance/billing")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
 
     writeAuditLog({ userId: authResult.session.userId, action: "UPDATE", module: "Surgery", recordId: surgeryId, changes: { status: newStatus } })
 

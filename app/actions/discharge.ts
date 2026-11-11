@@ -287,7 +287,7 @@ export async function processDischarge(
     const totalBedCharges = billData.roomRent
     const totalLabCharges = billData.labTotal
     const totalPharmacyCharges = billData.pharmacyTotal
-    const pharmacyTax = billData.pharmacyTax
+    const pharmacyTax = 0
     const doctorFees = billData.doctorFees
     const subtotal = billData.subtotal + (billData.discountAmount || 0)
     const totalBillAmount = Math.max(0, billData.totalBillAmount - additionalDiscount)
@@ -466,7 +466,7 @@ export async function processDischarge(
           createdAt: effectiveDischargeDate,
           totalAmount: subtotal,
           discountAmount: additionalDiscount,
-          taxAmount: pharmacyTax,
+          taxAmount: 0,
           netAmount: totalBillAmount,
           paidAmount: finalPaidAmount,
           balanceAmount: finalBalanceAmount,
@@ -850,6 +850,12 @@ export async function processDischarge(
     revalidatePath("/dashboard/finance/billing")
     revalidatePath("/dashboard/billing-counter/ipd")
     revalidatePath("/dashboard/ipd/billing")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
+    revalidatePath("/dashboard/ipd/print/bill")
 
     writeAuditLog({ userId: authResult.session.userId, action: "PROCESS", module: "Discharge", recordId: result.discharge.id, changes: { admissionId, patientCode: admission.patient.patientId, dischargeType, billNumber: result.dischargeBill.billNumber, isBsky: isBskyPatient } })
 

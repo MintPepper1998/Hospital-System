@@ -414,12 +414,6 @@ export function DischargeBillingForm({
               <span className="text-muted-foreground">Subtotal</span>
               <span className="font-medium">₹{subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
             </div>
-            {pharmacyTax > 0 && (
-              <div className="flex justify-between text-amber-600">
-                <span>GST on Medicines (18%)</span>
-                <span className="font-medium">+₹{pharmacyTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-              </div>
-            )}
             {hasInsuranceCoverage && insuranceCoveredAmount > 0 && (
               <div className="flex justify-between text-blue-600">
                 <span>Less: Insurance Coverage</span>

@@ -360,8 +360,6 @@ export default async function PrintBillPage(props: {
               <span>- ₹{b.discountAmount?.toLocaleString("en-IN")}</span>
             </div>
           )}
-
-          {b.pharmacyTax > 0 && <TotalRow label="Pharmacy GST (18%)" amount={b.pharmacyTax} />}
           
           <div className="border-t-2 border-gray-900 pt-3 mt-3">
             <TotalRow label="TOTAL BILL AMOUNT" amount={b.totalBillAmount} bold large />

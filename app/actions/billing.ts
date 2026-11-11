@@ -251,7 +251,7 @@ export async function calculateFinalBill(
     const pharmacyCharges = await getIPDPharmacyCharges(prisma, admission.id)
     const manualPharmacyTotal = pharmacyCustomChargesRecords.reduce((sum, c) => sum + c.totalAmount, 0)
     const pharmacyTotal = pharmacyCharges.total + manualPharmacyTotal
-    const pharmacyTax = pharmacyCharges.tax
+    const pharmacyTax = 0 // GST on pharmacy is inclusive in medicine MRP; do not charge separately or add to bill
     const medicines: BillBreakdown["medicines"] = [
       ...pharmacyCharges.items.map((i) => ({
         name: i.name,
@@ -704,7 +704,7 @@ export async function calculateFinalBill(
 
     const balanceDue = patientLiability - totalAmountPaid
 
-    writeAuditLog({ userId: authResult.session.userId, action: "PROCESS", module: "FinalBill", recordId: admissionId, changes: { totalAmount: subtotal + pharmacyTax } })
+    writeAuditLog({ userId: authResult.session.userId, action: "PROCESS", module: "FinalBill", recordId: admissionId, changes: { totalAmount: subtotal } })
 
     return {
       success: true,
@@ -745,8 +745,8 @@ export async function calculateFinalBill(
         discountType,
         discountReason,
         subtotal,
-        pharmacyTax,
-        totalBillAmount: subtotal + pharmacyTax,
+        pharmacyTax: 0,
+        totalBillAmount: subtotal,
         advanceDeposit,
         amountPaid: totalAmountPaid,
         netPayable,
@@ -971,6 +971,17 @@ export async function processIpdPayment(
       changes: { amount, paymentMode, ...(isSplit ? { splitPayments } : {}) },
     })
 
+    // Authoritative cache invalidation across all billing, IPD, and financial account views
+    revalidatePath("/dashboard/billing-counter/ipd")
+    revalidatePath("/dashboard/ipd")
+    revalidatePath(`/dashboard/ipd/patient/${admissionId}`)
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
+    revalidatePath("/dashboard/ipd/print/bill")
+
     return { success: true, message: "Payment processed successfully", data: result }
   } catch (error: any) {
     console.error("[ERROR] processIpdPayment:", error)
@@ -1061,8 +1072,15 @@ export async function reverseIpdPayment(billingId: string, reason?: string) {
     })
 
     if (result.admissionId) {
-      revalidatePath(`/dashboard/billing-counter/ipd`)
+      revalidatePath("/dashboard/billing-counter/ipd")
       revalidatePath(`/dashboard/ipd/patient/${result.admissionId}`)
+      revalidatePath("/dashboard/ipd")
+      revalidatePath("/dashboard/finance")
+      revalidatePath("/dashboard/master-finance")
+      revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+      revalidatePath("/dashboard/master-finance/general-ledger")
+      revalidatePath("/dashboard/reports/day-book")
+      revalidatePath("/dashboard/ipd/print/bill")
     }
 
     return { 
@@ -1140,6 +1158,10 @@ export async function applyDiscount(
       recordId: admissionId,
       changes: { discountType, value, reason },
     })
+
+    revalidatePath("/dashboard/billing-counter/ipd")
+    revalidatePath(`/dashboard/ipd/patient/${admissionId}`)
+    revalidatePath("/dashboard/ipd/print/bill")
 
     return { success: true, message: "Discount applied successfully" }
   } catch (error: any) {
@@ -1220,6 +1242,10 @@ export async function addCustomCharge(data: {
       changes: { ...data, totalAmount, category: data.category || "ADDON" },
     })
 
+    revalidatePath("/dashboard/billing-counter/ipd")
+    revalidatePath(`/dashboard/ipd/patient/${data.admissionId}`)
+    revalidatePath("/dashboard/ipd/print/bill")
+
     return { success: true, message: "Charge added successfully", data: charge }
   } catch (error: any) {
     console.error("[ERROR] addCustomCharge:", error)
@@ -1243,6 +1269,12 @@ export async function removeCustomCharge(chargeId: string) {
       recordId: chargeId,
       changes: charge,
     })
+
+    if (charge.admissionId) {
+      revalidatePath("/dashboard/billing-counter/ipd")
+      revalidatePath(`/dashboard/ipd/patient/${charge.admissionId}`)
+      revalidatePath("/dashboard/ipd/print/bill")
+    }
 
     return { success: true, message: "Charge removed successfully" }
   } catch (error: any) {

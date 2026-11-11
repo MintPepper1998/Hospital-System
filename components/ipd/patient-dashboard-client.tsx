@@ -606,12 +606,6 @@ export function PatientDashboardClient({
                           <span className="font-semibold">-₹{admission.billBreakdown.discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       )}
-                      {admission.billBreakdown.pharmacyTax > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-500 font-medium">GST (Pharmacy 18%)</span>
-                          <span className="font-semibold text-slate-700">₹{admission.billBreakdown.pharmacyTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
                     </>
                   ) : (
                     <div className="flex justify-between items-center text-sm">

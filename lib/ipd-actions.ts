@@ -594,6 +594,13 @@ export async function admitPatient(data: {
     revalidatePath("/dashboard/ipd")
     revalidatePath("/dashboard/ipd/admission")
     revalidatePath("/dashboard/finance/billing")
+    revalidatePath("/dashboard/billing-counter/ipd")
+    revalidatePath("/dashboard/finance")
+    revalidatePath("/dashboard/master-finance")
+    revalidatePath("/dashboard/master-finance/cash-bank/accounts")
+    revalidatePath("/dashboard/master-finance/general-ledger")
+    revalidatePath("/dashboard/reports/day-book")
+    revalidatePath("/dashboard/ipd/print/bill")
 
     // Notify relevant staff about new admission
     await createMultiRoleNotification({

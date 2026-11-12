@@ -143,6 +143,7 @@ model Staff {
   rfidTag              String?                    @unique
   opdCustomPaperUrl    String?
   signatureUrl         String?
+  isIpdSignatory       Boolean                    @default(false)
   ipdAssignments       IPDNurseAssignment[]
   ambulanceAssignments AmbulanceStaffAssignment[]
   appointments         Appointment[]              @relation("DoctorAppointments")
@@ -151,6 +152,8 @@ model Staff {
   emergencyVisits      EmergencyVisit[]           @relation("EREmergencyDoctor")
   erShifts             ERDoctorShift[]            @relation("ERDoctorShifts")
   ipdAdmissions        IPDAdmission[]             @relation("IPDPrimaryDoctor")
+  ipdDischargeDoctorAdmissions    IPDAdmission[]  @relation("IPDDischargeDoctor")
+  ipdDischargeSignatoryAdmissions IPDAdmission[]  @relation("IPDDischargeSignatory")
   onlineBookings       OnlineBooking[]            @relation("OnlineBookingDoctor")
   otSchedules          OTSchedule[]
   rosters              Roster[]                   @relation("StaffRosters")
@@ -163,6 +166,7 @@ model Staff {
 
   @@index([employeeId])
   @@index([department])
+  @@index([isIpdSignatory])
   @@map("staff")
 }
 
@@ -591,6 +595,8 @@ model IPDAdmission {
   dischargeType          DischargeType?
   dischargeTypeCode      String?
   customDischargeData    Json?
+  dischargeDoctorId      String?
+  dischargeSignatoryId   String?
   finalDiagnosis         String?
   proceduresDone         String?
   courseInHospital       String?
@@ -625,6 +631,8 @@ model IPDAdmission {
   bed                    Bed                    @relation(fields: [bedId], references: [id])
   patient                Patient                @relation(fields: [patientId], references: [id])
   primaryDoctor          Staff                  @relation("IPDPrimaryDoctor", fields: [primaryDoctorId], references: [id])
+  dischargeDoctor        Staff?                 @relation("IPDDischargeDoctor", fields: [dischargeDoctorId], references: [id])
+  dischargeSignatory     Staff?                 @relation("IPDDischargeSignatory", fields: [dischargeSignatoryId], references: [id])
   sourceEmergencyVisit   EmergencyVisit?        @relation(fields: [sourceEmergencyVisitId], references: [id])
   equipmentUsages        IPDEquipmentUsage[]
   ipdLabRequests         IPDLabRequest[]
@@ -644,6 +652,8 @@ model IPDAdmission {
   @@index([createdAt])
   @@index([isBskyAdmission])
   @@index([dischargeType])
+  @@index([dischargeDoctorId])
+  @@index([dischargeSignatoryId])
   @@map("ipd_admissions")
 }
 

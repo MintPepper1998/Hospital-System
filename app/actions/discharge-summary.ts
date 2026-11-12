@@ -43,6 +43,8 @@ interface DischargeSummaryData {
   adviceOnDischarge?: string
   followUpDate?: string | null // ISO date string
   dischargeMedicines?: DischargeMedicineItem[]
+  dischargeDoctorId?: string | null
+  dischargeSignatoryId?: string | null
 }
 
 // ============================================
@@ -142,6 +144,8 @@ export async function saveDischargeSummary(
             conditionAtDischarge: data.conditionAtDischarge?.trim() || null,
             adviceOnDischarge: data.adviceOnDischarge?.trim() || null,
             followUpDate,
+            ...(data.dischargeDoctorId !== undefined ? { dischargeDoctorId: data.dischargeDoctorId || null } : {}),
+            ...(data.dischargeSignatoryId !== undefined ? { dischargeSignatoryId: data.dischargeSignatoryId || null } : {}),
           },
         })
 
@@ -258,6 +262,13 @@ export async function getDischargeSummary(context: { admissionId?: string; emerg
         include: {
           patient: { include: { user: true } },
           primaryDoctor: { include: { user: true } },
+          dischargeDoctor: { include: { user: true } },
+          dischargeSignatory: { include: { user: true } },
+          doctors: {
+            include: {
+              doctor: { include: { user: true } },
+            },
+          },
           bed: { include: { ward: true } },
           ipdPrescriptions: { where: { status: "ACTIVE" }, orderBy: { createdAt: "asc" } },
           ipdLabRequests: { where: { status: "COMPLETED" }, orderBy: { createdAt: "asc" } },
@@ -266,6 +277,67 @@ export async function getDischargeSummary(context: { admissionId?: string; emerg
       })
 
       if (!admission) return { success: false, message: "Admission not found", data: null }
+
+      const ipdSignatoryStaff = await prisma.staff.findMany({
+        where: {
+          isIpdSignatory: true,
+          user: { isActive: true },
+        },
+        include: { user: true },
+        orderBy: { user: { name: "asc" } },
+      })
+
+      const doctorMap = new Map<string, {
+        id: string
+        name: string
+        department: string | null
+        specialization: string | null
+        signatureUrl: string | null
+        isPrimary: boolean
+        roleLabel: string
+      }>()
+
+      if (admission.primaryDoctor) {
+        doctorMap.set(admission.primaryDoctor.id, {
+          id: admission.primaryDoctor.id,
+          name: admission.primaryDoctor.user.name || "Unknown Doctor",
+          department: admission.primaryDoctor.department,
+          specialization: admission.primaryDoctor.specialization,
+          signatureUrl: admission.primaryDoctor.signatureUrl || admission.primaryDoctor.user.signatureUrl || null,
+          isPrimary: true,
+          roleLabel: "Primary Treating Doctor",
+        })
+      }
+
+      for (const d of admission.doctors || []) {
+        if (d.doctor && !doctorMap.has(d.doctor.id)) {
+          doctorMap.set(d.doctor.id, {
+            id: d.doctor.id,
+            name: d.doctor.user.name || "Unknown Doctor",
+            department: d.doctor.department,
+            specialization: d.doctor.specialization,
+            signatureUrl: d.doctor.signatureUrl || d.doctor.user.signatureUrl || null,
+            isPrimary: false,
+            roleLabel: d.role ? `${d.role.replace("_", " ")} Doctor` : "Assigned Doctor",
+          })
+        }
+      }
+
+      const assignedDoctors = Array.from(doctorMap.values())
+
+      const ipdSignatories = ipdSignatoryStaff.map((s) => ({
+        id: s.id,
+        name: s.user.name || "Unknown Staff",
+        department: s.department,
+        designation: s.designation || s.user.role.replace("_", " "),
+        signatureUrl: s.signatureUrl || s.user.signatureUrl || null,
+        hasSignature: Boolean(s.signatureUrl || s.user.signatureUrl),
+      }))
+
+      const selectedDoctorId = admission.dischargeDoctorId || admission.primaryDoctorId
+      const selectedDoctor = doctorMap.get(selectedDoctorId) || assignedDoctors[0] || null
+      const selectedSignatoryId = admission.dischargeSignatoryId || (ipdSignatories.length > 0 ? ipdSignatories[0].id : null)
+      const selectedSignatory = ipdSignatories.find((s) => s.id === selectedSignatoryId) || null
 
       const admissionDate = new Date(admission.admissionDate)
       const dischargeDate = admission.dischargeDate ? new Date(admission.dischargeDate) : new Date()
@@ -301,9 +373,18 @@ export async function getDischargeSummary(context: { admissionId?: string; emerg
           bloodGroup: admission.patient.bloodGroup,
           phone: admission.patient.phone,
           address: [admission.patient.address, admission.patient.city, admission.patient.state, admission.patient.pincode].filter(Boolean).join(", "),
-          doctorName: admission.primaryDoctor.user.name || "Unknown",
-          doctorDepartment: admission.primaryDoctor.department,
-          doctorSpecialization: admission.primaryDoctor.specialization,
+          doctorName: selectedDoctor ? selectedDoctor.name : (admission.primaryDoctor.user.name || "Unknown"),
+          doctorDepartment: selectedDoctor ? selectedDoctor.department : admission.primaryDoctor.department,
+          doctorSpecialization: selectedDoctor ? selectedDoctor.specialization : admission.primaryDoctor.specialization,
+          doctorSignatureUrl: selectedDoctor ? selectedDoctor.signatureUrl : (admission.primaryDoctor.signatureUrl || admission.primaryDoctor.user.signatureUrl || null),
+          dischargeDoctorId: selectedDoctorId,
+          dischargeSignatoryId: selectedSignatoryId,
+          signatoryName: selectedSignatory ? selectedSignatory.name : "Authorized Signatory",
+          signatoryDesignation: selectedSignatory ? selectedSignatory.designation : "Authorized Signatory",
+          signatoryDepartment: selectedSignatory ? selectedSignatory.department : null,
+          signatorySignatureUrl: selectedSignatory ? selectedSignatory.signatureUrl : null,
+          assignedDoctors,
+          ipdSignatories,
           bedNumber: admission.bed.bedNumber,
           wardName: admission.bed.ward.name,
           activeMedications: admission.ipdPrescriptions.map((rx) => ({ name: rx.medicineName, dosage: rx.dosage, frequency: rx.frequency, duration: rx.duration, instruction: rx.instruction })),
@@ -376,3 +457,43 @@ export async function getDischargeSummary(context: { admissionId?: string; emerg
     return { success: false, message: error.message || "Failed to fetch discharge summary", data: null }
   }
 }
+
+// ============================================
+// UPDATE DISCHARGE SIGNATURES
+// ============================================
+
+export async function updateDischargeSignatures(
+  admissionId: string,
+  data: { dischargeDoctorId?: string | null; dischargeSignatoryId?: string | null }
+) {
+  const authResult = await requireAuthSafe(["SUPER_ADMIN", "DOCTOR", "NURSE", "ADMIN"])
+  if (!authResult.ok) return { success: false, message: authResult.error }
+
+  try {
+    const admission = await prisma.iPDAdmission.findUnique({
+      where: { id: admissionId },
+      select: { id: true },
+    })
+
+    if (!admission) {
+      return { success: false, message: "Admission not found" }
+    }
+
+    await prisma.iPDAdmission.update({
+      where: { id: admissionId },
+      data: {
+        ...(data.dischargeDoctorId !== undefined ? { dischargeDoctorId: data.dischargeDoctorId || null } : {}),
+        ...(data.dischargeSignatoryId !== undefined ? { dischargeSignatoryId: data.dischargeSignatoryId || null } : {}),
+      },
+    })
+
+    revalidatePath(`/dashboard/ipd/print/summary/${admissionId}`)
+    revalidatePath(`/dashboard/ipd/patient/${admissionId}`)
+
+    return { success: true, message: "Discharge signatures updated successfully" }
+  } catch (error: any) {
+    console.error("[ERROR] updateDischargeSignatures:", error)
+    return { success: false, message: error.message || "Failed to update discharge signatures" }
+  }
+}
+

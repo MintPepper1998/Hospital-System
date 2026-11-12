@@ -26,6 +26,7 @@ interface CreateStaffInput {
   image?: string
   idCardImage?: string
   signatureUrl?: string
+  isIpdSignatory?: boolean
   permissions?: string[]
 }
 
@@ -101,6 +102,7 @@ export async function createStaff(data: CreateStaffInput) {
           licenseNumber: data.licenseNumber?.trim() || null,
           idCardImage: data.idCardImage || null,
           signatureUrl: data.signatureUrl || null,
+          isIpdSignatory: Boolean(data.isIpdSignatory),
           joiningDate: new Date(),
         },
         include: { user: true },
@@ -254,6 +256,7 @@ export interface UpdateStaffInput {
   image?: string
   idCardImage?: string
   signatureUrl?: string
+  isIpdSignatory?: boolean
 }
 
 export async function updateStaff(data: UpdateStaffInput) {
@@ -316,6 +319,10 @@ export async function updateStaff(data: UpdateStaffInput) {
 
       if (data.signatureUrl !== undefined) {
         staffUpdateData.signatureUrl = data.signatureUrl || null
+      }
+
+      if (data.isIpdSignatory !== undefined) {
+        staffUpdateData.isIpdSignatory = Boolean(data.isIpdSignatory)
       }
 
       await tx.staff.update({
@@ -485,4 +492,94 @@ export async function deleteHRDepartment(name: string) {
     return { success: false, message: 'Failed to delete' }
   }
 }
+
+// ============================================
+// IPD DISCHARGE SIGNATORIES
+// ============================================
+
+export async function toggleIpdSignatory(staffId: string) {
+  const authResult = await requireAuthSafe(["SUPER_ADMIN"])
+  if (!authResult.ok) return { success: false, message: authResult.error }
+
+  try {
+    const staff = await prisma.staff.findUnique({
+      where: { id: staffId },
+      include: { user: true },
+    })
+
+    if (!staff) {
+      return { success: false, message: "Staff member not found" }
+    }
+
+    const newStatus = !staff.isIpdSignatory
+
+    await prisma.staff.update({
+      where: { id: staffId },
+      data: { isIpdSignatory: newStatus },
+    })
+
+    writeAuditLog({
+      userId: authResult.session.userId,
+      action: "UPDATE",
+      module: "Staff",
+      recordId: staffId,
+      changes: { isIpdSignatory: newStatus, name: staff.user.name },
+    })
+
+    revalidatePath("/dashboard/hr/staff")
+    revalidatePath("/dashboard/ipd")
+
+    return {
+      success: true,
+      message: `${staff.user.name} is ${newStatus ? "now designated" : "no longer designated"} as an Authorized IPD Signatory`,
+      isIpdSignatory: newStatus,
+    }
+  } catch (error: any) {
+    console.error("[ERROR] toggleIpdSignatory:", error)
+    return { success: false, message: error.message || "Failed to update IPD signatory status" }
+  }
+}
+
+export async function getIpdSignatories() {
+  await requireAuth()
+
+  try {
+    const signatories = await prisma.staff.findMany({
+      where: {
+        isIpdSignatory: true,
+        user: { isActive: true },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            signatureUrl: true,
+          },
+        },
+      },
+      orderBy: {
+        user: { name: "asc" },
+      },
+    })
+
+    return {
+      success: true,
+      data: signatories.map((s) => ({
+        id: s.id,
+        name: s.user.name || "Unknown",
+        employeeId: s.employeeId,
+        department: s.department,
+        designation: s.designation || s.user.role.replace("_", " "),
+        signatureUrl: s.signatureUrl || s.user.signatureUrl || null,
+        hasSignature: Boolean(s.signatureUrl || s.user.signatureUrl),
+      })),
+    }
+  } catch (error: any) {
+    console.error("[ERROR] getIpdSignatories:", error)
+    return { success: false, message: error.message || "Failed to fetch IPD signatories", data: [] }
+  }
+}
+
 

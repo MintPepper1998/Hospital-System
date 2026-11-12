@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Plus,
   Trash2,
+  FileSignature,
 } from "lucide-react"
 import { saveDischargeSummary } from "@/app/actions/discharge-summary"
 import { MedicineStockSearch } from "@/components/pharmacy/medicine-stock-search"
@@ -57,6 +58,8 @@ interface DischargeEditorProps {
     conditionAtDischarge?: string | null
     adviceOnDischarge?: string | null
     followUpDate?: string | null
+    dischargeDoctorId?: string | null
+    dischargeSignatoryId?: string | null
     dischargeTypeCode?: string | null
     customDischargeData?: any
     dischargeMedicines?: {
@@ -80,6 +83,23 @@ interface DischargeEditorProps {
     instruction: string | null
   }[]
   dischargeTypes?: any[]
+  assignedDoctors?: {
+    id: string
+    name: string
+    department?: string | null
+    specialization?: string | null
+    signatureUrl?: string | null
+    isPrimary?: boolean
+    roleLabel?: string
+  }[]
+  ipdSignatories?: {
+    id: string
+    name: string
+    department?: string | null
+    designation?: string | null
+    signatureUrl?: string | null
+    hasSignature?: boolean
+  }[]
 }
 
 export function DischargeEditor({
@@ -90,6 +110,8 @@ export function DischargeEditor({
   initialData,
   activeMedications = [],
   dischargeTypes = [],
+  assignedDoctors = [],
+  ipdSignatories = [],
 }: DischargeEditorProps) {
   const [isPending, startTransition] = useTransition()
   const [saved, setSaved] = useState(false)
@@ -112,6 +134,23 @@ export function DischargeEditor({
   const [dynamicValues, setDynamicValues] = useState<Record<string, string>>(
     initialData?.customDischargeData || {}
   )
+
+  // Signatures configuration
+  const defaultDocId =
+    initialData?.dischargeDoctorId && assignedDoctors.some((d) => d.id === initialData.dischargeDoctorId)
+      ? initialData.dischargeDoctorId
+      : assignedDoctors[0]?.id || ""
+
+  const defaultSigId =
+    initialData?.dischargeSignatoryId && ipdSignatories.some((s) => s.id === initialData.dischargeSignatoryId)
+      ? initialData.dischargeSignatoryId
+      : ipdSignatories[0]?.id || "none"
+
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(defaultDocId)
+  const [selectedSignatoryId, setSelectedSignatoryId] = useState<string>(defaultSigId)
+
+  const curDoc = assignedDoctors.find((d) => d.id === selectedDoctorId) || assignedDoctors[0] || null
+  const curSig = selectedSignatoryId === "none" ? null : ipdSignatories.find((s) => s.id === selectedSignatoryId) || null
   const selectedType = dischargeTypes.find(dt => dt.code === selectedTypeCode)
 
   // Discharge Medicines State (keeps the real DB id so saves never duplicate rows)
@@ -202,6 +241,8 @@ export function DischargeEditor({
         conditionAtDischarge: selectedType?.templateSections ? (dynamicValues.conditionAtDischarge || conditionAtDischarge || undefined) : (conditionAtDischarge || undefined),
         adviceOnDischarge: selectedType?.templateSections ? (dynamicValues.adviceOnDischarge || adviceOnDischarge || undefined) : (adviceOnDischarge || undefined),
         followUpDate: followUpDate || null,
+        dischargeDoctorId: selectedDoctorId || null,
+        dischargeSignatoryId: selectedSignatoryId === "none" ? null : selectedSignatoryId,
         // Only send medicines for IPD, and only when not locked. Dispensed/cancelled rows are
         // sent with their id so the server knows they still exist, but it never modifies them.
         dischargeMedicines: admissionId && !medicinesLocked
@@ -688,6 +729,127 @@ export function DischargeEditor({
               onChange={(e) => setFollowUpDate(e.target.value)}
               min={new Date().toISOString().split("T")[0]}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Discharge Signatures Configuration */}
+      <Card className="border-indigo-100 bg-gradient-to-br from-white to-slate-50/50 shadow-sm">
+        <CardHeader className="pb-3 border-b border-slate-100">
+          <CardTitle className="text-base flex items-center gap-2 text-slate-800">
+            <FileSignature className="h-4 w-4 text-indigo-600" />
+            Discharge Summary Signatures
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Choose the treating doctor and authorized signatory for this patient&apos;s discharge summary report.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Treating Doctor Column */}
+            <div className="space-y-3 p-3.5 rounded-xl border border-slate-200 bg-white shadow-xs">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="discharge-treating-doctor" className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                  <Stethoscope className="h-3.5 w-3.5 text-blue-600" />
+                  Treating Doctor (Assigned to Patient)
+                </Label>
+                {curDoc?.signatureUrl ? (
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] py-0">
+                    ✓ Signature on file
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] py-0">
+                    Manual sign line
+                  </Badge>
+                )}
+              </div>
+
+              {assignedDoctors.length > 0 ? (
+                <select
+                  id="discharge-treating-doctor"
+                  className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  value={selectedDoctorId}
+                  onChange={(e) => setSelectedDoctorId(e.target.value)}
+                >
+                  {assignedDoctors.map((doc) => (
+                    <option key={doc.id} value={doc.id}>
+                      Dr. {doc.name} {doc.specialization ? `(${doc.specialization})` : ""} {doc.signatureUrl ? "• Has Signature" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-slate-500 italic">No assigned doctors for this admission.</p>
+              )}
+
+              {curDoc && (
+                <div className="pt-2 border-t border-slate-100 flex items-center gap-3">
+                  <div className="h-12 w-32 border border-dashed border-slate-200 bg-slate-50/60 rounded flex items-center justify-center p-1">
+                    {curDoc.signatureUrl ? (
+                      <img src={curDoc.signatureUrl} alt={curDoc.name} className="max-h-10 max-w-full object-contain" />
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">No digital sig</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 text-xs">
+                    <p className="font-semibold text-slate-800 truncate">Dr. {curDoc.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{curDoc.specialization || curDoc.department || "Treating Doctor"}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Authorized Signatory Column */}
+            <div className="space-y-3 p-3.5 rounded-xl border border-slate-200 bg-white shadow-xs">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="discharge-signatory" className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                  <FileSignature className="h-3.5 w-3.5 text-indigo-600" />
+                  Authorized Signatory (Hospital Opt-In)
+                </Label>
+                {curSig?.signatureUrl ? (
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] py-0">
+                    ✓ Signature on file
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] py-0">
+                    Manual sign line
+                  </Badge>
+                )}
+              </div>
+
+              <select
+                id="discharge-signatory"
+                className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                value={selectedSignatoryId}
+                onChange={(e) => setSelectedSignatoryId(e.target.value)}
+              >
+                <option value="none">None / Blank Signature Line</option>
+                {ipdSignatories.map((sig) => (
+                  <option key={sig.id} value={sig.id}>
+                    {sig.name} ({sig.designation || sig.department || "Staff"}) {sig.hasSignature ? "• Has Signature" : ""}
+                  </option>
+                ))}
+              </select>
+
+              {curSig ? (
+                <div className="pt-2 border-t border-slate-100 flex items-center gap-3">
+                  <div className="h-12 w-32 border border-dashed border-slate-200 bg-slate-50/60 rounded flex items-center justify-center p-1">
+                    {curSig.signatureUrl ? (
+                      <img src={curSig.signatureUrl} alt={curSig.name} className="max-h-10 max-w-full object-contain" />
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">No digital sig</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 text-xs">
+                    <p className="font-semibold text-slate-800 truncate">{curSig.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{curSig.designation || "Authorized Signatory"} • Shree Kamal Hospital</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="pt-2 border-t border-slate-100 text-xs text-muted-foreground italic">
+                  A blank dotted line for physical Authorized Signatory will be printed.
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

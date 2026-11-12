@@ -2,7 +2,7 @@ import { getDischargeSummary } from "@/app/actions/discharge-summary"
 import { getHospitalSettings } from "@/app/actions/settings"
 import { notFound } from "next/navigation"
 import { format } from "date-fns"
-import { PrintSummaryClient } from "@/components/ipd/print-summary-client"
+import { PrintSummaryClient, DischargeSignaturesFooter } from "@/components/ipd/print-summary-client"
 import { prisma } from "@/lib/prisma"
 
 interface PrintSummaryPageProps {
@@ -41,7 +41,13 @@ export default async function PrintSummaryPage({ params }: PrintSummaryPageProps
   const selectedType = dischargeTypesConfig.find(t => t.code === (d as any).dischargeTypeCode)
 
   return (
-    <PrintSummaryClient>
+    <PrintSummaryClient
+      admissionId={admissionId}
+      assignedDoctors={(d as any).assignedDoctors || []}
+      ipdSignatories={(d as any).ipdSignatories || []}
+      initialDoctorId={(d as any).dischargeDoctorId}
+      initialSignatoryId={(d as any).dischargeSignatoryId}
+    >
       <div className="print-page bg-white min-h-screen">
         {/* 
           Print-specific styles.
@@ -399,55 +405,20 @@ export default async function PrintSummaryPage({ params }: PrintSummaryPageProps
         {/* =============================== */}
         {/* FOOTER — Signatures & Disclaimer */}
         {/* =============================== */}
-        <div style={{
-          marginTop: "40px",
-          paddingTop: "16px",
-          borderTop: "2px solid #1e40af",
-        }}>
-          {/* Signature Row */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "24px" }}>
-            <div style={{ textAlign: "center" }}>
-              <div className="dotted-line" style={{ width: "200px", marginBottom: "4px" }}>&nbsp;</div>
-              <p style={{ fontSize: "12px", fontWeight: 600, margin: 0 }}>
-                Dr. {d.doctorName}
-              </p>
-              {d.doctorSpecialization && (
-                <p style={{ fontSize: "10px", color: "#666", margin: 0 }}>
-                  {d.doctorSpecialization}
-                  {d.doctorDepartment ? `, ${d.doctorDepartment}` : ""}
-                </p>
-              )}
-              <p style={{ fontSize: "10px", color: "#666", margin: 0 }}>
-                Treating Doctor
-              </p>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div className="dotted-line" style={{ width: "200px", marginBottom: "4px" }}>&nbsp;</div>
-              <p style={{ fontSize: "12px", fontWeight: 600, margin: 0 }}>
-                Authorized Signatory
-              </p>
-              <p style={{ fontSize: "10px", color: "#666", margin: 0 }}>
-                Shree Kamal Hospital
-              </p>
-            </div>
-          </div>
-
-          {/* Disclaimer */}
-          <div style={{
-            textAlign: "center",
-            fontSize: "10px",
-            color: "#888",
-            borderTop: "1px solid #e5e7eb",
-            paddingTop: "8px",
-          }}>
-            <p style={{ margin: "2px 0" }}>
-              This is an electronically generated discharge summary from the Shree Kamal Hospital Management System.
-            </p>
-            <p style={{ margin: "2px 0" }}>
-              For queries, contact the hospital reception or the treating doctor.
-            </p>
-          </div>
-        </div>
+        <DischargeSignaturesFooter
+          fallbackDoctor={{
+            name: d.doctorName,
+            specialization: d.doctorSpecialization,
+            department: d.doctorDepartment,
+            signatureUrl: (d as any).doctorSignatureUrl,
+          }}
+          fallbackSignatory={{
+            name: (d as any).signatoryName || "Authorized Signatory",
+            designation: (d as any).signatoryDesignation || "Authorized Signatory",
+            department: (d as any).signatoryDepartment,
+            signatureUrl: (d as any).signatorySignatureUrl,
+          }}
+        />
       </div>
     </PrintSummaryClient>
   )

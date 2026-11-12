@@ -52,6 +52,7 @@ export function EditStaffDialog({
   const [removeSignatureFile, setRemoveSignatureFile] = useState(false)
   const [currentSignature, setCurrentSignature] = useState<string | null>(null)
   const [viewSignatureOpen, setViewSignatureOpen] = useState(false)
+  const [isIpdSignatory, setIsIpdSignatory] = useState(false)
   
   const [form, setForm] = useState({
     id: "",
@@ -91,6 +92,7 @@ export function EditStaffDialog({
       setRemoveIdCard(false)
       setRemoveSignatureFile(false)
       setCurrentSignature(staff.signatureUrl || staff.user?.signatureUrl || null)
+      setIsIpdSignatory(Boolean(staff.isIpdSignatory))
     }
   }, [staff, open])
 
@@ -212,6 +214,7 @@ export function EditStaffDialog({
           password: form.password || undefined,
           image: profileUrl,
           idCardImage: idCardUrl,
+          isIpdSignatory,
         })
 
         if (result.success) {
@@ -560,6 +563,32 @@ export function EditStaffDialog({
                 </div>
               </div>
             )}
+
+            {/* IPD Signatory Opt-In Section */}
+            <div className="flex items-center justify-between p-3 rounded-lg border border-indigo-100 bg-indigo-50/40">
+              <div className="space-y-0.5 pr-4">
+                <div className="flex items-center gap-2">
+                  <FileSignature className="h-4 w-4 text-indigo-600" />
+                  <Label htmlFor="edit-ipd-signatory" className="text-xs font-semibold text-slate-900 cursor-pointer">
+                    Authorized IPD Signatory
+                  </Label>
+                  {isIpdSignatory && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                      Signatory Active
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Allow this staff member to appear in the Authorized Signatory list across all IPD patient discharge summaries.
+                </p>
+              </div>
+              <Checkbox
+                id="edit-ipd-signatory"
+                checked={isIpdSignatory}
+                onCheckedChange={(checked) => setIsIpdSignatory(Boolean(checked))}
+                className="h-4 w-4 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+              />
+            </div>
           </div>
 
           <DialogFooter className="pt-2">

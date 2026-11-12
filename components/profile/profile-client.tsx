@@ -64,6 +64,7 @@ interface ProfileData {
     designation: string | null
     specialization: string | null
     signatureUrl?: string | null
+    isIpdSignatory?: boolean
     joiningDate: string
   } | null
 }
@@ -216,6 +217,12 @@ function MyDetailsCard({ profile }: { profile: ProfileData }) {
                 <Badge variant="secondary" className="text-xs">
                   <IdCard className="h-3 w-3 mr-1" />
                   {profile.staff.employeeId}
+                </Badge>
+              )}
+              {profile.staff?.isIpdSignatory && (
+                <Badge variant="outline" className="text-xs bg-indigo-50 text-indigo-700 border-indigo-200">
+                  <FileSignature className="h-3 w-3 mr-1" />
+                  Authorized IPD Signatory
                 </Badge>
               )}
             </div>

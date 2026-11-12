@@ -46,6 +46,7 @@ export async function getMyProfile() {
             designation: user.staff.designation,
             specialization: user.staff.specialization,
             signatureUrl: user.staff.signatureUrl || user.signatureUrl || null,
+            isIpdSignatory: user.staff.isIpdSignatory,
             joiningDate: user.staff.joiningDate.toISOString(),
           }
         : null,

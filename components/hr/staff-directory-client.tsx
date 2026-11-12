@@ -58,7 +58,7 @@ import {
   Settings2,
   FileSignature,
 } from "lucide-react"
-import { createStaff, toggleStaffStatus, updateStaff, deleteStaff, addHRDepartment, renameHRDepartment, deleteHRDepartment } from "@/app/actions/staff"
+import { createStaff, toggleStaffStatus, updateStaff, deleteStaff, addHRDepartment, renameHRDepartment, deleteHRDepartment, toggleIpdSignatory } from "@/app/actions/staff"
 import { uploadSignature } from "@/app/actions/signature"
 import { toggleEmployeeLeave } from "@/lib/actions/hr"
 import { toast } from "sonner"
@@ -89,6 +89,7 @@ interface StaffMember {
   joiningDate: string
   idCardImage: string | null
   signatureUrl?: string | null
+  isIpdSignatory?: boolean
   user: {
     id: string
     name: string | null
@@ -347,6 +348,18 @@ function StaffCard({ employee: emp, router, temporaryPermissions = [], departmen
     })
   }
 
+  const handleToggleIpdSignatory = () => {
+    startTransition(async () => {
+      const res = await toggleIpdSignatory(emp.id)
+      if (res.success) {
+        toast.success(res.message)
+        router.refresh()
+      } else {
+        toast.error(res.message)
+      }
+    })
+  }
+
   return (
     <Card className={`hover:shadow-md transition-shadow border ${!emp.user.isActive ? "opacity-60" : ""}`}>
       <CardContent className="p-4">
@@ -402,6 +415,10 @@ function StaffCard({ employee: emp, router, temporaryPermissions = [], departmen
               <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
                 <User className="mr-2 h-4 w-4 text-indigo-600" />
                 Edit Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleToggleIpdSignatory} className="text-indigo-600">
+                <FileSignature className="mr-2 h-4 w-4 text-indigo-600" />
+                {emp.isIpdSignatory ? "Remove IPD Signatory" : "Designate IPD Signatory"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setShowTempAccess(true)}>
@@ -523,6 +540,12 @@ function StaffCard({ employee: emp, router, temporaryPermissions = [], departmen
             <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-[10px]">On Leave</Badge>
           ) : (
             <Badge variant="secondary" className="bg-green-100 text-green-700 text-[10px]">Active</Badge>
+          )}
+          {emp.isIpdSignatory && (
+            <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] gap-1 font-medium">
+              <FileSignature className="h-2.5 w-2.5" />
+              IPD Signatory
+            </Badge>
           )}
         </div>
 
@@ -730,6 +753,7 @@ function AddStaffDialog({
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null)
   const [idCardFile, setIdCardFile] = useState<File | null>(null)
   const [signatureFile, setSignatureFile] = useState<File | null>(null)
+  const [isIpdSignatory, setIsIpdSignatory] = useState(false)
 
   const isDoctor = form.role === "DOCTOR"
   const [permSearch, setPermSearch] = useState("")
@@ -771,6 +795,7 @@ function AddStaffDialog({
     setProfilePhoto(null)
     setIdCardFile(null)
     setSignatureFile(null)
+    setIsIpdSignatory(false)
     setPermSearch("")
   }
 
@@ -857,6 +882,7 @@ function AddStaffDialog({
           permissions: form.permissions.length > 0 ? form.permissions : undefined,
           image: profileUrl || undefined,
           idCardImage: idCardUrl || undefined,
+          isIpdSignatory,
         })
 
         if (result.success) {
@@ -1197,6 +1223,32 @@ function AddStaffDialog({
               />
               <p className="text-[10px] text-muted-foreground">Auto-reformed to PNG • Permanent</p>
             </div>
+          </div>
+
+          {/* IPD Signatory Opt-In Section */}
+          <div className="flex items-center justify-between p-3 rounded-lg border border-indigo-100 bg-indigo-50/40">
+            <div className="space-y-0.5 pr-4">
+              <div className="flex items-center gap-2">
+                <FileSignature className="h-4 w-4 text-indigo-600" />
+                <Label htmlFor="add-ipd-signatory" className="text-xs font-semibold text-slate-900 cursor-pointer">
+                  Authorized IPD Signatory
+                </Label>
+                {isIpdSignatory && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                    Signatory Active
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Allow this staff member to appear in the Authorized Signatory list across all IPD patient discharge summaries.
+              </p>
+            </div>
+            <Checkbox
+              id="add-ipd-signatory"
+              checked={isIpdSignatory}
+              onCheckedChange={(checked) => setIsIpdSignatory(Boolean(checked))}
+              className="h-4 w-4 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+            />
           </div>
 
           <DialogFooter className="pt-2">

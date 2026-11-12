@@ -45,6 +45,8 @@ export function PatientDashboardClient({
   dietPlans,
   availableDoctors,
   dischargeTypes = [],
+  assignedDoctors = [],
+  ipdSignatories = [],
 }: {
   admission: any
   age: number | null
@@ -52,6 +54,8 @@ export function PatientDashboardClient({
   dietPlans: any[]
   availableDoctors: any[]
   dischargeTypes: any[]
+  assignedDoctors?: any[]
+  ipdSignatories?: any[]
 }) {
   const [activeTab, setActiveTab] = useState("Overview")
 
@@ -754,6 +758,8 @@ export function PatientDashboardClient({
                admissionStatus={admission.status}
                doctorName={admission.primaryDoctor?.user?.name || 'Unknown'}
                dischargeTypes={dischargeTypes}
+               assignedDoctors={assignedDoctors}
+               ipdSignatories={ipdSignatories}
                initialData={{
                   dischargeTypeCode: admission.dischargeTypeCode,
                   customDischargeData: admission.customDischargeData,
@@ -765,6 +771,8 @@ export function PatientDashboardClient({
                   adviceOnDischarge: admission.adviceOnDischarge,
                   followUpDate: admission.followUpDate,
                   dischargeMedicines: admission.dischargeMedicines,
+                  dischargeDoctorId: admission.dischargeDoctorId,
+                  dischargeSignatoryId: admission.dischargeSignatoryId,
                }}
                activeMedications={admission.ipdPrescriptions.filter((p: any) => p.status === 'ACTIVE').map((p: any) => ({
                   medicineName: p.medicineName,

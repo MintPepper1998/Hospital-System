@@ -90,6 +90,15 @@ export default async function PatientDashboardPage({ params }: PatientDashboardP
     orderBy: { displayOrder: "asc" },
   })
 
+  const ipdSignatoryStaff = await prisma.staff.findMany({
+    where: {
+      isIpdSignatory: true,
+      user: { isActive: true },
+    },
+    include: { user: true },
+    orderBy: { user: { name: "asc" } },
+  })
+
   if (!admission) {
     notFound()
   }
@@ -151,6 +160,8 @@ export default async function PatientDashboardPage({ params }: PatientDashboardP
     // Discharge summary fields (for the Summary tab editor)
     dischargeTypeCode: admission.dischargeTypeCode || null,
     customDischargeData: admission.customDischargeData || null,
+    dischargeDoctorId: admission.dischargeDoctorId || null,
+    dischargeSignatoryId: admission.dischargeSignatoryId || null,
     finalDiagnosis: admission.finalDiagnosis || null,
     proceduresDone: admission.proceduresDone || null,
     courseInHospital: admission.courseInHospital || null,
@@ -284,6 +295,42 @@ export default async function PatientDashboardPage({ params }: PatientDashboardP
         dietPlans={JSON.parse(JSON.stringify(dietPlans))}
         availableDoctors={serializedDoctors as any}
         dischargeTypes={JSON.parse(JSON.stringify(dischargeTypes))}
+        assignedDoctors={(() => {
+          const docMap = new Map<string, any>()
+          if (admission.primaryDoctor) {
+            docMap.set(admission.primaryDoctor.id, {
+              id: admission.primaryDoctor.id,
+              name: admission.primaryDoctor.user?.name || "Unknown Doctor",
+              department: admission.primaryDoctor.department,
+              specialization: admission.primaryDoctor.specialization,
+              signatureUrl: admission.primaryDoctor.signatureUrl || admission.primaryDoctor.user?.signatureUrl || null,
+              isPrimary: true,
+              roleLabel: "Primary Treating Doctor",
+            })
+          }
+          for (const d of admission.doctors || []) {
+            if (d.doctor && !docMap.has(d.doctor.id)) {
+              docMap.set(d.doctor.id, {
+                id: d.doctor.id,
+                name: d.doctor.user?.name || "Unknown Doctor",
+                department: d.doctor.department,
+                specialization: d.doctor.specialization,
+                signatureUrl: d.doctor.signatureUrl || d.doctor.user?.signatureUrl || null,
+                isPrimary: false,
+                roleLabel: d.role ? `${d.role.replace("_", " ")} Doctor` : "Assigned Doctor",
+              })
+            }
+          }
+          return Array.from(docMap.values())
+        })()}
+        ipdSignatories={ipdSignatoryStaff.map((s) => ({
+          id: s.id,
+          name: s.user?.name || "Unknown Staff",
+          department: s.department,
+          designation: s.designation || s.user?.role?.replace("_", " "),
+          signatureUrl: s.signatureUrl || s.user?.signatureUrl || null,
+          hasSignature: Boolean(s.signatureUrl || s.user?.signatureUrl),
+        }))}
       />
     </div>
   )

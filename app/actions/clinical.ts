@@ -166,3 +166,119 @@ export async function skipPatientVitals(appointmentId: string) {
   writeAuditLog({ userId: "system", action: "UPDATE", module: "Appointment", recordId: appointmentId, changes: { status: "VITALS_DONE" } })
   return { success: true }
 }
+
+/**
+ * Complete an OPD consultation when the patient was treated on physical OPD paper.
+ * Allows attaching a scanned copy of the prescription/notes, sets status to COMPLETED,
+ * marks isPaperConsultation = true, and creates/updates the clinical medical record.
+ */
+export async function completePaperConsultation(data: {
+  appointmentId: string
+  scannedPaperUrl?: string | null
+  notes?: string | null
+  diagnosis?: string | null
+}) {
+  const session = await requireAuth(["SUPER_ADMIN", "DOCTOR", "RECEPTIONIST", "NURSE"])
+
+  if (!data.appointmentId) {
+    throw new Error("Appointment ID is required")
+  }
+
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: data.appointmentId },
+    include: {
+      patient: true,
+      doctor: {
+        include: { user: true },
+      },
+    },
+  })
+
+  if (!appointment) {
+    throw new Error("Appointment not found")
+  }
+
+  if (appointment.status === "CANCELLED") {
+    throw new Error("Cannot complete a cancelled appointment")
+  }
+
+  const finalDiagnosis = data.diagnosis?.trim() || appointment.diagnosis || "Treated on Physical OPD Paper"
+  const finalNotes = data.notes?.trim()
+    ? (appointment.notes ? `${appointment.notes}\n[Paper OPD]: ${data.notes.trim()}` : data.notes.trim())
+    : (appointment.notes || "Treated on physical OPD paper")
+  const paperUrl = data.scannedPaperUrl || appointment.scannedPaperUrl || null
+
+  const updatedAppointment = await prisma.$transaction(async (tx) => {
+    // 1. Update appointment
+    const updated = await tx.appointment.update({
+      where: { id: data.appointmentId },
+      data: {
+        status: "COMPLETED",
+        isPaperConsultation: true,
+        scannedPaperUrl: paperUrl,
+        diagnosis: finalDiagnosis,
+        notes: finalNotes,
+        prescription: appointment.prescription || "Prescription recorded on physical OPD paper (see attached scan).",
+      },
+    })
+
+    // 2. Create or update medical record
+    const existingRecord = await tx.medicalRecord.findFirst({
+      where: { appointmentId: data.appointmentId },
+    })
+
+    if (existingRecord) {
+      await tx.medicalRecord.update({
+        where: { id: existingRecord.id },
+        data: {
+          isPaperConsultation: true,
+          scannedPaperUrl: paperUrl,
+          diagnosis: finalDiagnosis,
+          examination: existingRecord.examination || "Physical OPD examination on paper",
+          treatment: existingRecord.treatment || "Prescription recorded on physical paper",
+        },
+      })
+    } else {
+      await tx.medicalRecord.create({
+        data: {
+          patientId: appointment.patientId,
+          appointmentId: appointment.id,
+          diagnosis: finalDiagnosis,
+          chiefComplaint: appointment.chiefComplaint || appointment.reason || "OPD Consultation",
+          examination: "Physical OPD examination on paper",
+          treatment: "Prescription recorded on physical paper",
+          isPaperConsultation: true,
+          scannedPaperUrl: paperUrl,
+        },
+      })
+    }
+
+    return updated
+  })
+
+  revalidatePath("/dashboard/clinical/opd")
+  revalidatePath("/dashboard/clinical/emr")
+  revalidatePath("/dashboard/doctor")
+  revalidatePath(`/dashboard/clinical/patient/${appointment.patientId}`)
+  revalidatePath(`/dashboard/clinical/emr/${data.appointmentId}`)
+  revalidatePath(`/dashboard/clinical/opd/${data.appointmentId}`)
+
+  writeAuditLog({
+    userId: session.userId || "system",
+    action: "UPDATE",
+    module: "Appointment",
+    recordId: data.appointmentId,
+    changes: {
+      status: "COMPLETED",
+      isPaperConsultation: true,
+      scannedPaperUrl: paperUrl,
+      diagnosis: finalDiagnosis,
+    },
+  })
+
+  return {
+    success: true,
+    message: "Consultation marked as completed on OPD paper",
+    appointment: updatedAppointment,
+  }
+}

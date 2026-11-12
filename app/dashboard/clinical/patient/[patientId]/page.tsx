@@ -22,6 +22,8 @@ import {
   XCircle,
   AlertCircle,
   CalendarPlus,
+  FileText,
+  ExternalLink,
 } from "lucide-react"
 import Link from "next/link"
 import { format, differenceInYears } from "date-fns"
@@ -270,6 +272,11 @@ export default async function PatientHistoryPage({ params }: PatientHistoryPageP
                                 >
                                   {apt.status}
                                 </Badge>
+                                {apt.isPaperConsultation && (
+                                  <Badge variant="outline" className="ml-2 bg-amber-50 text-amber-800 border-amber-300 text-[11px]">
+                                    <FileText className="h-3 w-3 mr-1 text-amber-600" /> Paper OPD
+                                  </Badge>
+                                )}
                               </CardTitle>
                               <CardDescription className="flex items-center gap-2">
                                 <Stethoscope className="h-3 w-3" />
@@ -310,6 +317,27 @@ export default async function PatientHistoryPage({ params }: PatientHistoryPageP
                                   <span className="text-muted-foreground">Weight:</span>{' '}
                                   <strong>{apt.weight}</strong>
                                 </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Paper OPD Notice & Scanned Paper */}
+                          {apt.isPaperConsultation && (
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-md flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-2 text-amber-900 text-sm font-semibold">
+                                <FileText className="h-4 w-4 text-amber-600 shrink-0" />
+                                <span>Consultation conducted on physical OPD paper</span>
+                              </div>
+                              {apt.scannedPaperUrl && (
+                                <a
+                                  href={apt.scannedPaperUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold rounded-md transition-colors"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                  View Scanned Paper
+                                </a>
                               )}
                             </div>
                           )}

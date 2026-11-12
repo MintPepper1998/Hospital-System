@@ -292,6 +292,10 @@ export default async function EMRPage({ params }: EMRPageProps) {
       */}
       <ConsultationManager 
         appointmentId={appointment.id}
+        patientName={appointment.patient.user.name || "Patient"}
+        patientPhone={appointment.patient.phone}
+        isPaperConsultation={appointment.isPaperConsultation}
+        scannedPaperUrl={appointment.scannedPaperUrl}
         initialData={{
           chiefComplaint: appointment.chiefComplaint || appointment.reason || undefined,
           diagnosis: appointment.diagnosis || undefined,

@@ -382,7 +382,7 @@ export default async function OPDPage({ searchParams }: OPDPageProps) {
                             : patient.queueStatus === "IN_PROGRESS"
                             ? "In Consultation"
                             : patient.queueStatus === "COMPLETED"
-                            ? "Done"
+                            ? ((patient.latestAppointment as any)?.isPaperConsultation ? "📄 Paper OPD Done" : "Done")
                             : patient.queueStatus}
                         </span>
                       </div>

@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import {
   Save, Loader2, FileText, Activity, Clock, BedDouble, Scissors,
-  AlertTriangle, ChevronDown, ChevronUp, Stethoscope
+  AlertTriangle, ChevronDown, ChevronUp, Stethoscope, ExternalLink, FileCheck
 } from "lucide-react"
 import { toast } from "sonner"
 import { saveConsultation } from "@/lib/actions"
@@ -18,9 +18,14 @@ import { useRouter } from "next/navigation"
 import PrescriptionWriter, { type Medication } from "@/components/clinical/prescription-writer"
 import LabTestSelector, { type LabTest } from "@/components/clinical/lab-test-selector"
 import { LabResultsViewer, type LabRequestWithResults } from "@/components/clinical/lab-results-viewer"
+import { PaperOPDDialog } from "@/components/clinical/paper-opd-dialog"
 
 interface ConsultationManagerProps {
   appointmentId: string
+  patientName?: string
+  patientPhone?: string | null
+  isPaperConsultation?: boolean
+  scannedPaperUrl?: string | null
   initialData?: {
     chiefComplaint?: string
     diagnosis?: string
@@ -40,7 +45,18 @@ interface ConsultationManagerProps {
   appointmentStatus?: string
 }
 
-export function ConsultationManager({ appointmentId, initialData, initialMedicines, availableLabTests, labResults, appointmentStatus }: ConsultationManagerProps) {
+export function ConsultationManager({
+  appointmentId,
+  patientName = "Patient",
+  patientPhone,
+  isPaperConsultation = false,
+  scannedPaperUrl,
+  initialData,
+  initialMedicines,
+  availableLabTests,
+  labResults,
+  appointmentStatus,
+}: ConsultationManagerProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -177,6 +193,56 @@ export function ConsultationManager({ appointmentId, initialData, initialMedicin
 
   return (
     <div className="space-y-6">
+      {/* Treated on Paper Option Banner */}
+      <Card className="border-amber-200 bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white shadow-sm overflow-hidden">
+        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800 shrink-0 mt-0.5">
+              <FileCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-bold text-zinc-800">
+                  {isPaperConsultation ? "Consultation Conducted on Physical OPD Paper" : "Treated on Physical OPD Paper?"}
+                </h4>
+                <Badge variant="outline" className="text-[10px] bg-amber-100/70 text-amber-800 border-amber-300">
+                  {isPaperConsultation ? "Paper Record Attached" : "Alternative Workflow"}
+                </Badge>
+              </div>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                {isPaperConsultation
+                  ? "This consultation was completed using physical paper prescription notes."
+                  : "If you examined this patient and wrote the prescription on paper, upload the scanned sheet and complete directly without typing digital prescriptions."}
+              </p>
+              {scannedPaperUrl && (
+                <div className="mt-2 flex items-center gap-2">
+                  <a
+                    href={scannedPaperUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-zinc-50 text-blue-600 border border-zinc-200 rounded-lg text-xs font-semibold shadow-xs"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    View Scanned Paper
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center gap-2">
+            <PaperOPDDialog
+              appointmentId={appointmentId}
+              patientName={patientName}
+              patientPhone={patientPhone}
+              existingScanUrl={scannedPaperUrl}
+              isCompleted={isPaperConsultation}
+              triggerLabel={isPaperConsultation ? "Update Paper Scan" : "Done on Paper"}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold border-none"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Vitals Section */}
       <Card>
         <CardHeader>
@@ -581,6 +647,17 @@ export function ConsultationManager({ appointmentId, initialData, initialMedicin
         >
           Cancel
         </Button>
+
+        <PaperOPDDialog
+          appointmentId={appointmentId}
+          patientName={patientName}
+          patientPhone={patientPhone}
+          existingScanUrl={scannedPaperUrl}
+          isCompleted={isPaperConsultation}
+          triggerLabel={isPaperConsultation ? "Update Paper Scan" : "Done on Paper"}
+          className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+        />
+
         <Button
           onClick={handleSave}
           disabled={isPending}

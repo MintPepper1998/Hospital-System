@@ -342,6 +342,8 @@ model Appointment {
   advisedSurgeryName      String?
   surgeryUrgency          String?
   surgeryNotes            String?
+  isPaperConsultation     Boolean           @default(false)
+  scannedPaperUrl         String?
   casualtyVisitId         String?
   source                  String? // "OPD" | "CASUALTY" — null defaults to OPD
   createdAt               DateTime          @default(now())
@@ -374,6 +376,8 @@ model MedicalRecord {
   examination    String?
   treatment      String?
   followUpDate   DateTime?
+  isPaperConsultation Boolean   @default(false)
+  scannedPaperUrl String?
   recordDate     DateTime       @default(now())
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt

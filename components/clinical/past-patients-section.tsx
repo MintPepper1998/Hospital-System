@@ -5,7 +5,7 @@ import Link from "next/link"
 import { format } from "date-fns"
 import {
   History, Search, X, FileText, Pill, ChevronRight,
-  Stethoscope, FolderOpen, Calendar, User, Clock
+  Stethoscope, FolderOpen, Calendar, User, Clock, ExternalLink
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -46,6 +46,8 @@ interface PastPatientAppt {
   patientDbId: string
   patientGender: string | null
   patientAge: number | null
+  isPaperConsultation?: boolean
+  scannedPaperUrl?: string | null
   prescriptions: PastPrescription[]
 }
 
@@ -198,25 +200,46 @@ export function PastPatientsSection({ pastPatients }: Props) {
                             </div>
                           </TableCell>
                           <TableCell className="max-w-[200px]">
-                            <p className="text-xs font-semibold text-zinc-600 truncate">
-                              {appt.diagnosis || appt.chiefComplaint || "General Consultation"}
-                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-xs font-semibold text-zinc-600 truncate">
+                                {appt.diagnosis || appt.chiefComplaint || "General Consultation"}
+                              </p>
+                              {appt.isPaperConsultation && (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                  📄 Paper
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <button
-                              onClick={() => openPrescriptions(appt)}
-                              className={`px-3 py-1.5 rounded-full text-[11px] font-bold gap-1.5 inline-flex items-center transition-all ${
-                                hasRx
-                                  ? "neo-flat bg-[#e0e5ec] text-violet-600 hover:text-violet-700"
-                                  : "neo-pressed bg-[#e0e5ec] text-zinc-400 cursor-not-allowed"
-                              }`}
-                              disabled={!hasRx}
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                              {hasRx
-                                ? `View Rx (${appt.prescriptions.length})`
-                                : "No Rx"}
-                            </button>
+                            <div className="inline-flex items-center gap-1.5 justify-center">
+                              <button
+                                onClick={() => openPrescriptions(appt)}
+                                className={`px-3 py-1.5 rounded-full text-[11px] font-bold gap-1.5 inline-flex items-center transition-all ${
+                                  hasRx
+                                    ? "neo-flat bg-[#e0e5ec] text-violet-600 hover:text-violet-700"
+                                    : "neo-pressed bg-[#e0e5ec] text-zinc-400 cursor-not-allowed"
+                                }`}
+                                disabled={!hasRx}
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                                {hasRx
+                                  ? `View Rx (${appt.prescriptions.length})`
+                                  : "No Rx"}
+                              </button>
+                              {appt.scannedPaperUrl && (
+                                <a
+                                  href={appt.scannedPaperUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2.5 py-1.5 rounded-full text-[11px] font-bold neo-flat bg-[#e0e5ec] text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 transition-all"
+                                  title="View Scanned OPD Paper"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  Scan
+                                </a>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-3 items-center">

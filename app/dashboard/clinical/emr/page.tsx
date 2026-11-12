@@ -11,6 +11,7 @@ import { format, differenceInYears, addDays } from "date-fns"
 import { PastPatientsSection } from "@/components/clinical/past-patients-section"
 import { UpcomingAppointmentsSection } from "@/components/clinical/upcoming-appointments-section"
 import { DoctorFilterSelect } from "@/components/clinical/doctor-filter-select"
+import { PaperOPDDialog } from "@/components/clinical/paper-opd-dialog"
 import {
   Table,
   TableBody,
@@ -196,6 +197,8 @@ export default async function DoctorQueuePage({ searchParams }: EMRPageProps) {
       patientDbId: a.patient.id,
       patientGender: a.patient.gender,
       patientAge: age,
+      isPaperConsultation: (a as any).isPaperConsultation || false,
+      scannedPaperUrl: (a as any).scannedPaperUrl || null,
       prescriptions: a.patient.prescriptions.map(p => ({
         id: p.id,
         prescriptionDate: p.prescriptionDate.toISOString(),
@@ -503,7 +506,7 @@ export default async function DoctorQueuePage({ searchParams }: EMRPageProps) {
                               )}
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex justify-end gap-3">
+                              <div className="flex justify-end gap-2 items-center">
                                 {appointment.status === "WAITING_FOR_REPORTS" && (
                                   <Link href={`/dashboard/clinical/emr/${appointment.id}/lab-slip`}>
                                     <button className="neo-button h-9 px-4 rounded-full text-sm font-semibold text-amber-600 bg-[#e0e5ec] flex items-center">
@@ -512,6 +515,15 @@ export default async function DoctorQueuePage({ searchParams }: EMRPageProps) {
                                     </button>
                                   </Link>
                                 )}
+
+                                <PaperOPDDialog
+                                  appointmentId={appointment.id}
+                                  patientId={appointment.patient.id}
+                                  patientName={appointment.patient.user.name || "Patient"}
+                                  patientPhone={appointment.patient.phone}
+                                  triggerVariant="neo"
+                                  triggerLabel="Done on Paper"
+                                />
                                 
                                 {["PENDING", "SCHEDULED", "CONFIRMED", "WAITING"].includes(appointment.status) ? (
                                   <button disabled className="h-9 px-6 rounded-full text-sm font-bold text-zinc-400 bg-zinc-200 cursor-not-allowed">

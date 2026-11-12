@@ -4,9 +4,10 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button"
-import { Calendar, Stethoscope, History, Printer, Pencil, Activity, AlertTriangle, UserCheck, XCircle, Loader2 } from "lucide-react"
+import { Calendar, Stethoscope, History, Printer, Pencil, Activity, AlertTriangle, UserCheck, XCircle, Loader2, FileText, ExternalLink } from "lucide-react"
 import { BookAppointmentDialog } from "@/components/book-appointment-dialog"
 import { PrintOPDButton } from "@/components/print-opd-button"
+import { PaperOPDDialog } from "@/components/clinical/paper-opd-dialog"
 import { cn } from "@/lib/utils"
 import {
   Tooltip,
@@ -42,6 +43,8 @@ interface Doctor {
 interface Appointment {
   id: string
   status: string
+  isPaperConsultation?: boolean
+  scannedPaperUrl?: string | null
 }
 
 interface PatientActionButtonsProps {
@@ -259,6 +262,15 @@ export function PatientActionButtons({
           Skip Vitals
         </Button>
 
+        <PaperOPDDialog
+          appointmentId={appointment.id}
+          patientId={patientId}
+          patientName={patientName}
+          patientPhone={patientPhone}
+          triggerLabel="Done on Paper"
+          triggerVariant="compact"
+        />
+
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -311,6 +323,14 @@ export function PatientActionButtons({
             "text-[#0066CC] hover:text-[#0052A3] hover:bg-blue-50"
           )}
         />
+        <PaperOPDDialog
+          appointmentId={appointment.id}
+          patientId={patientId}
+          patientName={patientName}
+          patientPhone={patientPhone}
+          triggerLabel="Done on Paper"
+          triggerVariant="compact"
+        />
         {!hideConsultation && (
           <Link href={`/dashboard/clinical/opd/${appointment.id}`}>
             <Button
@@ -330,7 +350,7 @@ export function PatientActionButtons({
   // IN_PROGRESS — consultation already started
   if (appointment && appointment.status === "IN_PROGRESS") {
     return (
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <EditButton />
         <PrintOPDButton
           appointmentId={appointment.id}
@@ -340,6 +360,14 @@ export function PatientActionButtons({
             buttonVariants({ variant: "outline", size: "sm" }),
             "text-[#0066CC] hover:text-[#0052A3] hover:bg-blue-50"
           )}
+        />
+        <PaperOPDDialog
+          appointmentId={appointment.id}
+          patientId={patientId}
+          patientName={patientName}
+          patientPhone={patientPhone}
+          triggerLabel="Done on Paper"
+          triggerVariant="compact"
         />
         {!hideConsultation && (
           <Link href={`/dashboard/clinical/opd/${appointment.id}`}>
@@ -360,8 +388,38 @@ export function PatientActionButtons({
   // COMPLETED
   if (appointment && appointment.status === "COMPLETED") {
     return (
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <EditButton />
+        {appointment.isPaperConsultation && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+            <FileText className="h-3 w-3 text-amber-600" />
+            Paper OPD
+          </span>
+        )}
+        {appointment.scannedPaperUrl && (
+          <a
+            href={appointment.scannedPaperUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            )}
+          >
+            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+            View Scan
+          </a>
+        )}
+        <PaperOPDDialog
+          appointmentId={appointment.id}
+          patientId={patientId}
+          patientName={patientName}
+          patientPhone={patientPhone}
+          existingScanUrl={appointment.scannedPaperUrl}
+          isCompleted={true}
+          triggerLabel={appointment.scannedPaperUrl ? "Update Scan" : "Attach Scan"}
+          triggerVariant="compact"
+        />
         <Link
           href={`/dashboard/clinical/patient/${patientId}`}
           className={cn(

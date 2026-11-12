@@ -911,12 +911,14 @@ export async function updateConsultation(
     const diagnosis = formData.get("diagnosis") as string
     const prescription = formData.get("prescription") as string
     const notes = formData.get("notes") as string
+    const isPaperConsultation = formData.get("isPaperConsultation") === "true"
+    const scannedPaperUrl = (formData.get("scannedPaperUrl") as string) || null
 
     // Extract selected lab tests (multiple values)
     const labTestIds = formData.getAll("labTests") as string[]
 
-    // Validate required fields
-    if (!diagnosis || !prescription) {
+    // Validate required fields (relaxed if treated on physical paper)
+    if (!isPaperConsultation && (!diagnosis || !prescription)) {
       return {
         success: false,
         error: true,
@@ -960,9 +962,11 @@ export async function updateConsultation(
           weight: weight || null,
           bloodPressure: bloodPressure || null,
           reason: chiefComplaint || appointment.reason,
-          diagnosis: diagnosis,
-          prescription: prescription,
+          diagnosis: diagnosis || (isPaperConsultation ? "Treated on Physical OPD Paper" : null),
+          prescription: prescription || (isPaperConsultation ? "Prescription recorded on physical OPD paper (see attached scan)." : null),
           notes: notes || null,
+          isPaperConsultation: isPaperConsultation || false,
+          scannedPaperUrl: scannedPaperUrl || null,
           status: AppointmentStatus.COMPLETED,
         },
       })
@@ -5087,6 +5091,9 @@ export async function saveConsultation(data: {
   advisedSurgeryName?: string
   surgeryUrgency?: string
   surgeryNotes?: string
+  // Paper Consultation
+  isPaperConsultation?: boolean
+  scannedPaperUrl?: string
 }) {
   const authResult = await requireAuthSafe(["SUPER_ADMIN", "DOCTOR"])
   if (!authResult.ok) return { success: false, message: authResult.error }
@@ -5147,6 +5154,8 @@ export async function saveConsultation(data: {
           advisedSurgeryName: data.advisedSurgeryName || null,
           surgeryUrgency: data.surgeryUrgency || null,
           surgeryNotes: data.surgeryNotes || null,
+          isPaperConsultation: data.isPaperConsultation || false,
+          scannedPaperUrl: data.scannedPaperUrl || null,
         }
       })
 
@@ -5156,9 +5165,11 @@ export async function saveConsultation(data: {
           patientId: appointment.patientId,
           appointmentId: data.appointmentId,
           chiefComplaint: data.chiefComplaint || null,
-          diagnosis: data.diagnosis || null,
+          diagnosis: data.diagnosis || (data.isPaperConsultation ? "Treated on Physical OPD Paper" : null),
           symptoms: data.symptoms || null,
-          examination: data.notes || null,
+          examination: data.notes || (data.isPaperConsultation ? "Physical OPD examination on paper" : null),
+          isPaperConsultation: data.isPaperConsultation || false,
+          scannedPaperUrl: data.scannedPaperUrl || null,
           vitals: {
             bloodPressure: data.bloodPressure,
             pulse: data.pulse,

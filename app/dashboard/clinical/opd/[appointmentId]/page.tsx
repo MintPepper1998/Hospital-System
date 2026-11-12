@@ -6,10 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Activity, Stethoscope, Pill, FileText, CheckCircle, FlaskConical } from "lucide-react"
+import { ArrowLeft, Activity, Stethoscope, Pill, FileText, CheckCircle, FlaskConical, FileCheck, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { differenceInYears } from "date-fns"
 import { LabTestSelector } from "@/components/clinical/lab-test-selector"
+import { PaperOPDDialog } from "@/components/clinical/paper-opd-dialog"
+import { Badge } from "@/components/ui/badge"
 
 interface ConsultationPageProps {
   params: Promise<{
@@ -142,6 +144,56 @@ export default async function ConsultationPage({ params }: ConsultationPageProps
                 {appointment.patient.patientId}
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Paper OPD Option Card */}
+      <Card className="border-amber-200 bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white shadow-sm overflow-hidden">
+        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800 shrink-0 mt-0.5">
+              <FileCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-bold text-zinc-800">
+                  {appointment.isPaperConsultation ? "Consultation Conducted on Physical OPD Paper" : "Treated on Physical OPD Paper?"}
+                </h4>
+                <Badge variant="outline" className="text-[10px] bg-amber-100/70 text-amber-800 border-amber-300">
+                  {appointment.isPaperConsultation ? "Paper Record Attached" : "Alternative Workflow"}
+                </Badge>
+              </div>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                {appointment.isPaperConsultation
+                  ? "This consultation was completed using physical paper prescription notes."
+                  : "If you examined this patient and wrote the prescription on physical paper, upload the scan and complete directly."}
+              </p>
+              {appointment.scannedPaperUrl && (
+                <div className="mt-2 flex items-center gap-2">
+                  <a
+                    href={appointment.scannedPaperUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-zinc-50 text-blue-600 border border-zinc-200 rounded-lg text-xs font-semibold shadow-xs"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    View Scanned Paper
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center gap-2">
+            <PaperOPDDialog
+              appointmentId={appointment.id}
+              patientName={appointment.patient.user.name || "Patient"}
+              patientPhone={appointment.patient.phone}
+              existingScanUrl={appointment.scannedPaperUrl}
+              isCompleted={appointment.isPaperConsultation}
+              triggerLabel={appointment.isPaperConsultation ? "Update Paper Scan" : "Done on Paper"}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold border-none"
+            />
           </div>
         </CardContent>
       </Card>
@@ -305,12 +357,23 @@ export default async function ConsultationPage({ params }: ConsultationPageProps
         </Card>
 
         {/* Submit Button */}
-        <div className="mt-6 flex justify-end gap-4">
+        <div className="mt-6 flex justify-end gap-3 items-center">
           <Link href="/dashboard/clinical/opd">
             <Button type="button" variant="outline">
               Cancel
             </Button>
           </Link>
+
+          <PaperOPDDialog
+            appointmentId={appointment.id}
+            patientName={appointment.patient.user.name || "Patient"}
+            patientPhone={appointment.patient.phone}
+            existingScanUrl={appointment.scannedPaperUrl}
+            isCompleted={appointment.isPaperConsultation}
+            triggerLabel={appointment.isPaperConsultation ? "Update Paper Scan" : "Done on Paper"}
+            className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+          />
+
           <Button
             type="submit"
             className="bg-green-600 hover:bg-green-700 text-white"

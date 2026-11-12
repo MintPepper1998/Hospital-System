@@ -172,3 +172,4 @@ describe("completePaperConsultation", () => {
     ).rejects.toThrow("Cannot complete a cancelled appointment")
   })
 })
+

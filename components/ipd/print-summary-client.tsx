@@ -9,9 +9,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Printer, ArrowLeft, Stethoscope, FileSignature, Loader2, Check, Sparkles } from "lucide-react"
+import { Printer, ArrowLeft, Stethoscope, FileSignature, Loader2, Check, Sparkles, Upload } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { updateDischargeSignatures } from "@/app/actions/discharge-summary"
+import { SignatureUploadDialog } from "@/components/ipd/signature-upload-dialog"
 import { toast } from "sonner"
 
 export interface AssignedDoctorOption {
@@ -72,30 +73,49 @@ export function PrintSummaryClient({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
+  // Dynamic doctor and signatory state to reflect uploaded signatures immediately
+  const [doctorsList, setDoctorsList] = useState<AssignedDoctorOption[]>(assignedDoctors)
+  const [signatoriesList, setSignatoriesList] = useState<IpdSignatoryOption[]>(ipdSignatories)
+
   // Find initial selections
   const defaultDocId =
-    initialDoctorId && assignedDoctors.some((d) => d.id === initialDoctorId)
+    initialDoctorId && doctorsList.some((d) => d.id === initialDoctorId)
       ? initialDoctorId
-      : assignedDoctors[0]?.id || ""
+      : doctorsList[0]?.id || ""
 
   const defaultSigId =
-    initialSignatoryId && ipdSignatories.some((s) => s.id === initialSignatoryId)
+    initialSignatoryId && signatoriesList.some((s) => s.id === initialSignatoryId)
       ? initialSignatoryId
-      : ipdSignatories[0]?.id || "none"
+      : signatoriesList[0]?.id || "none"
 
   const [selectedDoctorId, setSelectedDoctorIdState] = useState<string>(defaultDocId)
   const [selectedSignatoryId, setSelectedSignatoryIdState] = useState<string>(defaultSigId)
   const [autoPrintFired, setAutoPrintFired] = useState(false)
 
+  // Upload dialog state
+  const [uploadTarget, setUploadTarget] = useState<{
+    open: boolean
+    staffId?: string
+    name: string
+    roleLabel: string
+    currentSig?: string | null
+    type: "DOCTOR" | "SIGNATORY"
+  }>({
+    open: false,
+    name: "",
+    roleLabel: "",
+    type: "DOCTOR",
+  })
+
   // Current selected doctor object
   const selectedDoctor =
-    assignedDoctors.find((d) => d.id === selectedDoctorId) || assignedDoctors[0] || null
+    doctorsList.find((d) => d.id === selectedDoctorId) || doctorsList[0] || null
 
   // Current selected signatory object
   const selectedSignatory =
     selectedSignatoryId === "none"
       ? null
-      : ipdSignatories.find((s) => s.id === selectedSignatoryId) || null
+      : signatoriesList.find((s) => s.id === selectedSignatoryId) || null
 
   // Auto-trigger print when page loads for the first time
   useEffect(() => {
@@ -171,7 +191,7 @@ export function PrintSummaryClient({
               Back to Dashboard
             </Button>
 
-            {/* Middle: Signature Selectors */}
+            {/* Middle: Signature Selectors & Upload Quick Actions */}
             <div className="flex flex-wrap items-center gap-4 bg-slate-800/80 px-3.5 py-1.5 rounded-xl border border-slate-700/60 shadow-inner">
               {/* Treating Doctor Selector */}
               <div className="flex items-center gap-2">
@@ -179,37 +199,63 @@ export function PrintSummaryClient({
                   <Stethoscope className="h-3.5 w-3.5 text-blue-400" />
                   Treating Doctor:
                 </span>
-                {assignedDoctors.length > 0 ? (
-                  <Select value={selectedDoctorId} onValueChange={handleDoctorChange}>
-                    <SelectTrigger className="h-8 text-xs bg-slate-950 border-slate-700 text-slate-100 min-w-[210px] focus:ring-blue-500">
-                      <SelectValue placeholder="Select Treating Doctor" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-700 text-slate-100">
-                      {assignedDoctors.map((doc) => (
-                        <SelectItem
-                          key={doc.id}
-                          value={doc.id}
-                          className="text-xs focus:bg-slate-800 focus:text-white cursor-pointer"
-                        >
-                          <div className="flex items-center justify-between gap-2 w-full">
-                            <span>
-                              Dr. {doc.name}{" "}
-                              {doc.specialization ? `(${doc.specialization})` : ""}
-                            </span>
-                            {doc.signatureUrl ? (
-                              <span className="text-[10px] text-emerald-400 font-medium px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800">
-                                ✓ Signature
+                {doctorsList.length > 0 ? (
+                  <div className="flex items-center gap-1.5">
+                    <Select value={selectedDoctorId} onValueChange={handleDoctorChange}>
+                      <SelectTrigger className="h-8 text-xs bg-slate-950 border-slate-700 text-slate-100 min-w-[210px] focus:ring-blue-500">
+                        <SelectValue placeholder="Select Treating Doctor" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-900 border-slate-700 text-slate-100">
+                        {doctorsList.map((doc) => (
+                          <SelectItem
+                            key={doc.id}
+                            value={doc.id}
+                            className="text-xs focus:bg-slate-800 focus:text-white cursor-pointer"
+                          >
+                            <div className="flex items-center justify-between gap-2 w-full">
+                              <span>
+                                Dr. {doc.name}{" "}
+                                {doc.specialization ? `(${doc.specialization})` : ""}
                               </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-400">
-                                No Sig
-                              </span>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                              {doc.signatureUrl ? (
+                                <span className="text-[10px] text-emerald-400 font-medium px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800">
+                                  ✓ Signature
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400">
+                                  No Sig
+                                </span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {selectedDoctor && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setAutoPrintFired(true)
+                          setUploadTarget({
+                            open: true,
+                            staffId: selectedDoctor.id,
+                            name: `Dr. ${selectedDoctor.name}`,
+                            roleLabel: selectedDoctor.specialization || selectedDoctor.department || "Treating Doctor",
+                            currentSig: selectedDoctor.signatureUrl,
+                            type: "DOCTOR",
+                          })
+                        }}
+                        className="h-8 px-2 text-[11px] text-blue-300 hover:text-white hover:bg-slate-700 border border-slate-700 gap-1"
+                        title={selectedDoctor.signatureUrl ? "Update digital signature" : "Upload digital signature"}
+                      >
+                        <Upload className="h-3 w-3" />
+                        <span>{selectedDoctor.signatureUrl ? "Edit Sig" : "Upload Sig"}</span>
+                      </Button>
+                    )}
+                  </div>
                 ) : (
                   <span className="text-xs text-slate-400 italic">No assigned doctors</span>
                 )}
@@ -223,41 +269,67 @@ export function PrintSummaryClient({
                   <FileSignature className="h-3.5 w-3.5 text-indigo-400" />
                   Authorized Signatory:
                 </span>
-                <Select value={selectedSignatoryId} onValueChange={handleSignatoryChange}>
-                  <SelectTrigger className="h-8 text-xs bg-slate-950 border-slate-700 text-slate-100 min-w-[220px] focus:ring-indigo-500">
-                    <SelectValue placeholder="Select Authorized Signatory" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700 text-slate-100">
-                    <SelectItem
-                      value="none"
-                      className="text-xs focus:bg-slate-800 focus:text-white cursor-pointer"
-                    >
-                      <span className="text-slate-400 italic">None / Blank Signature Line</span>
-                    </SelectItem>
-                    {ipdSignatories.map((sig) => (
+                <div className="flex items-center gap-1.5">
+                  <Select value={selectedSignatoryId} onValueChange={handleSignatoryChange}>
+                    <SelectTrigger className="h-8 text-xs bg-slate-950 border-slate-700 text-slate-100 min-w-[210px] focus:ring-indigo-500">
+                      <SelectValue placeholder="Select Authorized Signatory" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-900 border-slate-700 text-slate-100">
                       <SelectItem
-                        key={sig.id}
-                        value={sig.id}
+                        value="none"
                         className="text-xs focus:bg-slate-800 focus:text-white cursor-pointer"
                       >
-                        <div className="flex items-center justify-between gap-2 w-full">
-                          <span>
-                            {sig.name} ({sig.designation || sig.department || "Staff"})
-                          </span>
-                          {sig.hasSignature ? (
-                            <span className="text-[10px] text-emerald-400 font-medium px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800">
-                              ✓ Signature
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-400">
-                              No Sig
-                            </span>
-                          )}
-                        </div>
+                        <span className="text-slate-400 italic">None / Blank Signature Line</span>
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {signatoriesList.map((sig) => (
+                        <SelectItem
+                          key={sig.id}
+                          value={sig.id}
+                          className="text-xs focus:bg-slate-800 focus:text-white cursor-pointer"
+                        >
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            <span>
+                              {sig.name} ({sig.designation || sig.department || "Staff"})
+                            </span>
+                            {sig.hasSignature ? (
+                              <span className="text-[10px] text-emerald-400 font-medium px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800">
+                                ✓ Signature
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400">
+                                No Sig
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {selectedSignatory && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setAutoPrintFired(true)
+                        setUploadTarget({
+                          open: true,
+                          staffId: selectedSignatory.id,
+                          name: selectedSignatory.name,
+                          roleLabel: selectedSignatory.designation || selectedSignatory.department || "Authorized Signatory",
+                          currentSig: selectedSignatory.signatureUrl,
+                          type: "SIGNATORY",
+                        })
+                      }}
+                      className="h-8 px-2 text-[11px] text-indigo-300 hover:text-white hover:bg-slate-700 border border-slate-700 gap-1"
+                      title={selectedSignatory.signatureUrl ? "Update digital signature" : "Upload digital signature"}
+                    >
+                      <Upload className="h-3 w-3" />
+                      <span>{selectedSignatory.signatureUrl ? "Edit Sig" : "Upload Sig"}</span>
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {isPending && (
@@ -281,6 +353,27 @@ export function PrintSummaryClient({
             </div>
           </div>
         </div>
+
+        {/* Live Upload Modal */}
+        <SignatureUploadDialog
+          open={uploadTarget.open}
+          onOpenChange={(open) => setUploadTarget((prev) => ({ ...prev, open }))}
+          targetStaffId={uploadTarget.staffId}
+          personName={uploadTarget.name}
+          roleLabel={uploadTarget.roleLabel}
+          currentSignatureUrl={uploadTarget.currentSig}
+          onSuccess={(newSigUrl) => {
+            if (uploadTarget.type === "DOCTOR") {
+              setDoctorsList((prev) =>
+                prev.map((d) => (d.id === uploadTarget.staffId ? { ...d, signatureUrl: newSigUrl } : d))
+              )
+            } else {
+              setSignatoriesList((prev) =>
+                prev.map((s) => (s.id === uploadTarget.staffId ? { ...s, signatureUrl: newSigUrl, hasSignature: Boolean(newSigUrl) } : s))
+              )
+            }
+          }}
+        />
 
         {children}
       </div>

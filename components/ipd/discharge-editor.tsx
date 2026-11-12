@@ -22,11 +22,94 @@ import {
   Plus,
   Trash2,
   FileSignature,
+  Upload,
 } from "lucide-react"
 import { saveDischargeSummary } from "@/app/actions/discharge-summary"
 import { MedicineStockSearch } from "@/components/pharmacy/medicine-stock-search"
+import { SignatureUploadDialog } from "@/components/ipd/signature-upload-dialog"
 import { toast } from "sonner"
 import Link from "next/link"
+
+// Helper functions to resolve section fields dynamically across custom and standard configurations
+function resolveDiagnosisField(dyn: Record<string, string>, fallback: string): string {
+  if (dyn.finalDiagnosis?.trim()) return dyn.finalDiagnosis.trim()
+  if (dyn.disease?.trim()) return dyn.disease.trim()
+  if (dyn.DISEASE?.trim()) return dyn.DISEASE.trim()
+  if (dyn.diagnosis?.trim()) return dyn.diagnosis.trim()
+  if (dyn.provisionalDiagnosis?.trim()) return dyn.provisionalDiagnosis.trim()
+  for (const [k, v] of Object.entries(dyn)) {
+    const key = k.trim().toLowerCase()
+    if ((key.includes("diag") || key.includes("disease")) && v?.trim()) {
+      return v.trim()
+    }
+  }
+  if (fallback?.trim()) return fallback.trim()
+  for (const v of Object.values(dyn)) {
+    if (typeof v === "string" && v.trim()) return v.trim()
+  }
+  return ""
+}
+
+function resolveTreatmentField(dyn: Record<string, string>, fallback: string): string {
+  if (dyn.treatmentGiven?.trim()) return dyn.treatmentGiven.trim()
+  for (const [k, v] of Object.entries(dyn)) {
+    const key = k.trim().toLowerCase()
+    if (key.includes("treat") && key.includes("given") && v?.trim()) {
+      return v.trim()
+    }
+  }
+  for (const [k, v] of Object.entries(dyn)) {
+    const key = k.trim().toLowerCase()
+    if (key.includes("treatment") && !key.includes("discharge") && v?.trim()) {
+      return v.trim()
+    }
+  }
+  return fallback?.trim() || ""
+}
+
+function resolveAdviceField(dyn: Record<string, string>, fallback: string): string {
+  if (dyn.adviceOnDischarge?.trim()) return dyn.adviceOnDischarge.trim()
+  for (const [k, v] of Object.entries(dyn)) {
+    const key = k.trim().toLowerCase()
+    if ((key.includes("advice") || (key.includes("treat") && key.includes("discharge"))) && v?.trim()) {
+      return v.trim()
+    }
+  }
+  return fallback?.trim() || ""
+}
+
+function resolveConditionField(dyn: Record<string, string>, fallback: string): string {
+  if (dyn.conditionAtDischarge?.trim()) return dyn.conditionAtDischarge.trim()
+  for (const [k, v] of Object.entries(dyn)) {
+    const key = k.trim().toLowerCase()
+    if (key.includes("condition") && v?.trim()) {
+      return v.trim()
+    }
+  }
+  return fallback?.trim() || ""
+}
+
+function resolveCourseField(dyn: Record<string, string>, fallback: string): string {
+  if (dyn.courseInHospital?.trim()) return dyn.courseInHospital.trim()
+  for (const [k, v] of Object.entries(dyn)) {
+    const key = k.trim().toLowerCase()
+    if (key.includes("course") && v?.trim()) {
+      return v.trim()
+    }
+  }
+  return fallback?.trim() || ""
+}
+
+function resolveProceduresField(dyn: Record<string, string>, fallback: string): string {
+  if (dyn.proceduresDone?.trim()) return dyn.proceduresDone.trim()
+  for (const [k, v] of Object.entries(dyn)) {
+    const key = k.trim().toLowerCase()
+    if ((key.includes("proc") || key.includes("surger")) && v?.trim()) {
+      return v.trim()
+    }
+  }
+  return fallback?.trim() || ""
+}
 
 interface DischargeMedicineRow {
   key: string // client-side React key
@@ -127,6 +210,25 @@ export function DischargeEditor({
     initialData?.followUpDate ? initialData.followUpDate.split("T")[0] : ""
   )
   
+  // Dynamic doctor and signatory state to reflect live signature uploads
+  const [doctorsList, setDoctorsList] = useState(assignedDoctors)
+  const [signatoriesList, setSignatoriesList] = useState(ipdSignatories)
+
+  // Upload dialog state
+  const [uploadTarget, setUploadTarget] = useState<{
+    open: boolean
+    staffId?: string
+    name: string
+    roleLabel: string
+    currentSig?: string | null
+    type: "DOCTOR" | "SIGNATORY"
+  }>({
+    open: false,
+    name: "",
+    roleLabel: "",
+    type: "DOCTOR",
+  })
+
   // Dynamic Configuration
   const [selectedTypeCode, setSelectedTypeCode] = useState<string>(
     initialData?.dischargeTypeCode || dischargeTypes[0]?.code || "NORMAL"
@@ -137,20 +239,20 @@ export function DischargeEditor({
 
   // Signatures configuration
   const defaultDocId =
-    initialData?.dischargeDoctorId && assignedDoctors.some((d) => d.id === initialData.dischargeDoctorId)
+    initialData?.dischargeDoctorId && doctorsList.some((d) => d.id === initialData.dischargeDoctorId)
       ? initialData.dischargeDoctorId
-      : assignedDoctors[0]?.id || ""
+      : doctorsList[0]?.id || ""
 
   const defaultSigId =
-    initialData?.dischargeSignatoryId && ipdSignatories.some((s) => s.id === initialData.dischargeSignatoryId)
+    initialData?.dischargeSignatoryId && signatoriesList.some((s) => s.id === initialData.dischargeSignatoryId)
       ? initialData.dischargeSignatoryId
-      : ipdSignatories[0]?.id || "none"
+      : signatoriesList[0]?.id || "none"
 
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>(defaultDocId)
   const [selectedSignatoryId, setSelectedSignatoryId] = useState<string>(defaultSigId)
 
-  const curDoc = assignedDoctors.find((d) => d.id === selectedDoctorId) || assignedDoctors[0] || null
-  const curSig = selectedSignatoryId === "none" ? null : ipdSignatories.find((s) => s.id === selectedSignatoryId) || null
+  const curDoc = doctorsList.find((d) => d.id === selectedDoctorId) || doctorsList[0] || null
+  const curSig = selectedSignatoryId === "none" ? null : signatoriesList.find((s) => s.id === selectedSignatoryId) || null
   const selectedType = dischargeTypes.find(dt => dt.code === selectedTypeCode)
 
   // Discharge Medicines State (keeps the real DB id so saves never duplicate rows)
@@ -219,27 +321,68 @@ export function DischargeEditor({
     toast.success("Treatment summary auto-filled from active medications")
   }
 
+  // Resolve dynamic section value across aliases and fallback standard fields
+  const getSectionValue = (sectionKey: string): string => {
+    if (dynamicValues[sectionKey] !== undefined) return dynamicValues[sectionKey]
+    const trimmed = sectionKey.trim()
+    if (dynamicValues[trimmed] !== undefined) return dynamicValues[trimmed]
+
+    const lower = trimmed.toLowerCase()
+    if (lower.includes("diag") || lower.includes("disease")) {
+      return dynamicValues.disease || dynamicValues.finalDiagnosis || finalDiagnosis || ""
+    }
+    if (lower.includes("treat") && lower.includes("given")) {
+      return dynamicValues["treatement given "] || dynamicValues.treatmentGiven || treatmentGiven || ""
+    }
+    if (lower.includes("treat") && lower.includes("discharge")) {
+      return dynamicValues["treatement on discharge "] || dynamicValues.treatmentOnDischarge || dynamicValues.adviceOnDischarge || adviceOnDischarge || ""
+    }
+    if (lower.includes("advice")) {
+      return dynamicValues.adviceOnDischarge || adviceOnDischarge || ""
+    }
+    if (lower.includes("condition")) {
+      return dynamicValues.conditionAtDischarge || conditionAtDischarge || ""
+    }
+    if (lower.includes("course")) {
+      return dynamicValues.courseInHospital || courseInHospital || ""
+    }
+    if (lower.includes("proc") || lower.includes("surger")) {
+      return dynamicValues.proceduresDone || proceduresDone || ""
+    }
+    return ""
+  }
+
   const handleSaveDraft = () => {
-    const isDynamic = selectedType?.templateSections && selectedType.templateSections.length > 0;
-    const finalDiagVal = isDynamic ? (dynamicValues.finalDiagnosis || "") : finalDiagnosis;
-    
-    if (!finalDiagVal.trim()) {
-      toast.error("Final Diagnosis is required (or ensure a value for the corresponding field)")
-      // Note: If finalDiagnosis isn't a required field in the dynamic config, this might block save. 
-      // Assuming it is usually mapped or we just warn. For now, let's bypass if dynamic and it doesn't exist in config.
+    const resolvedDiag = resolveDiagnosisField(dynamicValues, finalDiagnosis)
+    const resolvedTreatment = resolveTreatmentField(dynamicValues, treatmentGiven)
+    const resolvedAdvice = resolveAdviceField(dynamicValues, adviceOnDischarge)
+    const resolvedCondition = resolveConditionField(dynamicValues, conditionAtDischarge)
+    const resolvedCourse = resolveCourseField(dynamicValues, courseInHospital)
+    const resolvedProcedures = resolveProceduresField(dynamicValues, proceduresDone)
+
+    // Ensure dynamicValues also has standard keys synced
+    const payloadDynamic = selectedType?.templateSections ? { ...dynamicValues } : undefined
+    if (payloadDynamic) {
+      if (!payloadDynamic.finalDiagnosis && resolvedDiag) payloadDynamic.finalDiagnosis = resolvedDiag
+      if (payloadDynamic.disease && !payloadDynamic.finalDiagnosis) payloadDynamic.finalDiagnosis = payloadDynamic.disease
+      if (!payloadDynamic.treatmentGiven && resolvedTreatment) payloadDynamic.treatmentGiven = resolvedTreatment
+      if (!payloadDynamic.adviceOnDischarge && resolvedAdvice) payloadDynamic.adviceOnDischarge = resolvedAdvice
+      if (!payloadDynamic.conditionAtDischarge && resolvedCondition) payloadDynamic.conditionAtDischarge = resolvedCondition
+      if (!payloadDynamic.courseInHospital && resolvedCourse) payloadDynamic.courseInHospital = resolvedCourse
+      if (!payloadDynamic.proceduresDone && resolvedProcedures) payloadDynamic.proceduresDone = resolvedProcedures
     }
 
     setSaved(false)
     startTransition(async () => {
       const result = await saveDischargeSummary({ admissionId, emergencyVisitId }, {
         dischargeTypeCode: selectedTypeCode,
-        customDischargeData: selectedType?.templateSections ? dynamicValues : undefined,
-        finalDiagnosis: selectedType?.templateSections ? dynamicValues.finalDiagnosis || finalDiagnosis : finalDiagnosis,
-        proceduresDone: selectedType?.templateSections ? (dynamicValues.proceduresDone || proceduresDone || undefined) : (proceduresDone || undefined),
-        courseInHospital: selectedType?.templateSections ? (dynamicValues.courseInHospital || courseInHospital || undefined) : (courseInHospital || undefined),
-        treatmentGiven: selectedType?.templateSections ? (dynamicValues.treatmentGiven || treatmentGiven || undefined) : (treatmentGiven || undefined),
-        conditionAtDischarge: selectedType?.templateSections ? (dynamicValues.conditionAtDischarge || conditionAtDischarge || undefined) : (conditionAtDischarge || undefined),
-        adviceOnDischarge: selectedType?.templateSections ? (dynamicValues.adviceOnDischarge || adviceOnDischarge || undefined) : (adviceOnDischarge || undefined),
+        customDischargeData: payloadDynamic,
+        finalDiagnosis: resolvedDiag || finalDiagnosis || "Discharged in stable condition",
+        proceduresDone: resolvedProcedures || undefined,
+        courseInHospital: resolvedCourse || undefined,
+        treatmentGiven: resolvedTreatment || undefined,
+        conditionAtDischarge: resolvedCondition || undefined,
+        adviceOnDischarge: resolvedAdvice || undefined,
         followUpDate: followUpDate || null,
         dischargeDoctorId: selectedDoctorId || null,
         dischargeSignatoryId: selectedSignatoryId === "none" ? null : selectedSignatoryId,
@@ -263,7 +406,6 @@ export function DischargeEditor({
         toast.success(result.message)
         setSaved(true)
         // Replace local rows with the server's saved rows so every row now carries its real DB id.
-        // Without this, a second save would re-create rows that were just inserted.
         if (result.dischargeMedicines) {
           setDischargeMedicines(result.dischargeMedicines.map((m) => ({
             key: newKey(),
@@ -278,7 +420,6 @@ export function DischargeEditor({
             pharmacyStatus: m.pharmacyStatus,
           })))
         }
-        // Reset saved indicator after a few seconds
         setTimeout(() => setSaved(false), 3000)
       } else {
         toast.error(result.message || "Failed to save")
@@ -293,7 +434,7 @@ export function DischargeEditor({
   let saveDisabledMessage = "";
 
   if (isDynamic) {
-    const missingRequired = selectedType.templateSections.find((sec: any) => sec.required && !dynamicValues[sec.sectionKey]?.trim());
+    const missingRequired = selectedType.templateSections.find((sec: any) => sec.required && !getSectionValue(sec.sectionKey)?.trim());
     if (missingRequired) {
       isSaveDisabled = true;
       saveDisabledMessage = `Fill the required field: ${missingRequired.sectionLabel} to save`;
@@ -385,18 +526,7 @@ export function DischargeEditor({
                   <Textarea
                     id={section.sectionKey}
                     placeholder={section.placeholder || `Enter ${section.sectionLabel.toLowerCase()}...`}
-                    value={
-                      dynamicValues[section.sectionKey] !== undefined 
-                      ? dynamicValues[section.sectionKey] 
-                      : (
-                        section.sectionKey === 'finalDiagnosis' ? finalDiagnosis :
-                        section.sectionKey === 'proceduresDone' ? proceduresDone :
-                        section.sectionKey === 'courseInHospital' ? courseInHospital :
-                        section.sectionKey === 'treatmentGiven' ? treatmentGiven :
-                        section.sectionKey === 'conditionAtDischarge' ? conditionAtDischarge :
-                        section.sectionKey === 'adviceOnDischarge' ? adviceOnDischarge : ""
-                      )
-                    }
+                    value={getSectionValue(section.sectionKey)}
                     onChange={(e) => setDynamicValues({
                       ...dynamicValues,
                       [section.sectionKey]: e.target.value
@@ -764,14 +894,14 @@ export function DischargeEditor({
                 )}
               </div>
 
-              {assignedDoctors.length > 0 ? (
+              {doctorsList.length > 0 ? (
                 <select
                   id="discharge-treating-doctor"
                   className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   value={selectedDoctorId}
                   onChange={(e) => setSelectedDoctorId(e.target.value)}
                 >
-                  {assignedDoctors.map((doc) => (
+                  {doctorsList.map((doc) => (
                     <option key={doc.id} value={doc.id}>
                       Dr. {doc.name} {doc.specialization ? `(${doc.specialization})` : ""} {doc.signatureUrl ? "• Has Signature" : ""}
                     </option>
@@ -782,18 +912,40 @@ export function DischargeEditor({
               )}
 
               {curDoc && (
-                <div className="pt-2 border-t border-slate-100 flex items-center gap-3">
-                  <div className="h-12 w-32 border border-dashed border-slate-200 bg-slate-50/60 rounded flex items-center justify-center p-1">
-                    {curDoc.signatureUrl ? (
-                      <img src={curDoc.signatureUrl} alt={curDoc.name} className="max-h-10 max-w-full object-contain" />
-                    ) : (
-                      <span className="text-[10px] text-slate-400 italic">No digital sig</span>
-                    )}
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-12 w-32 border border-dashed border-slate-200 bg-slate-50/60 rounded flex items-center justify-center p-1 flex-shrink-0">
+                      {curDoc.signatureUrl ? (
+                        <img src={curDoc.signatureUrl} alt={curDoc.name} className="max-h-10 max-w-full object-contain" />
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic">No digital sig</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 text-xs">
+                      <p className="font-semibold text-slate-800 truncate">Dr. {curDoc.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{curDoc.specialization || curDoc.department || "Treating Doctor"}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 text-xs">
-                    <p className="font-semibold text-slate-800 truncate">Dr. {curDoc.name}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{curDoc.specialization || curDoc.department || "Treating Doctor"}</p>
-                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setUploadTarget({
+                        open: true,
+                        staffId: curDoc.id,
+                        name: `Dr. ${curDoc.name}`,
+                        roleLabel: curDoc.specialization || curDoc.department || "Treating Doctor",
+                        currentSig: curDoc.signatureUrl,
+                        type: "DOCTOR",
+                      })
+                    }}
+                    className="h-7 px-2.5 text-[11px] text-blue-600 border-blue-200 hover:bg-blue-50 flex-shrink-0 gap-1"
+                  >
+                    <Upload className="h-3 w-3" />
+                    {curDoc.signatureUrl ? "Change Sig" : "Upload Sig"}
+                  </Button>
                 </div>
               )}
             </div>
@@ -823,7 +975,7 @@ export function DischargeEditor({
                 onChange={(e) => setSelectedSignatoryId(e.target.value)}
               >
                 <option value="none">None / Blank Signature Line</option>
-                {ipdSignatories.map((sig) => (
+                {signatoriesList.map((sig) => (
                   <option key={sig.id} value={sig.id}>
                     {sig.name} ({sig.designation || sig.department || "Staff"}) {sig.hasSignature ? "• Has Signature" : ""}
                   </option>
@@ -831,18 +983,40 @@ export function DischargeEditor({
               </select>
 
               {curSig ? (
-                <div className="pt-2 border-t border-slate-100 flex items-center gap-3">
-                  <div className="h-12 w-32 border border-dashed border-slate-200 bg-slate-50/60 rounded flex items-center justify-center p-1">
-                    {curSig.signatureUrl ? (
-                      <img src={curSig.signatureUrl} alt={curSig.name} className="max-h-10 max-w-full object-contain" />
-                    ) : (
-                      <span className="text-[10px] text-slate-400 italic">No digital sig</span>
-                    )}
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-12 w-32 border border-dashed border-slate-200 bg-slate-50/60 rounded flex items-center justify-center p-1 flex-shrink-0">
+                      {curSig.signatureUrl ? (
+                        <img src={curSig.signatureUrl} alt={curSig.name} className="max-h-10 max-w-full object-contain" />
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic">No digital sig</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 text-xs">
+                      <p className="font-semibold text-slate-800 truncate">{curSig.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{curSig.designation || "Authorized Signatory"} • Shree Kamal Hospital</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 text-xs">
-                    <p className="font-semibold text-slate-800 truncate">{curSig.name}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{curSig.designation || "Authorized Signatory"} • Shree Kamal Hospital</p>
-                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setUploadTarget({
+                        open: true,
+                        staffId: curSig.id,
+                        name: curSig.name,
+                        roleLabel: curSig.designation || curSig.department || "Authorized Signatory",
+                        currentSig: curSig.signatureUrl,
+                        type: "SIGNATORY",
+                      })
+                    }}
+                    className="h-7 px-2.5 text-[11px] text-indigo-600 border-indigo-200 hover:bg-indigo-50 flex-shrink-0 gap-1"
+                  >
+                    <Upload className="h-3 w-3" />
+                    {curSig.signatureUrl ? "Change Sig" : "Upload Sig"}
+                  </Button>
                 </div>
               ) : (
                 <div className="pt-2 border-t border-slate-100 text-xs text-muted-foreground italic">
@@ -853,6 +1027,27 @@ export function DischargeEditor({
           </div>
         </CardContent>
       </Card>
+
+      {/* Signature Upload Dialog */}
+      <SignatureUploadDialog
+        open={uploadTarget.open}
+        onOpenChange={(open) => setUploadTarget((prev) => ({ ...prev, open }))}
+        targetStaffId={uploadTarget.staffId}
+        personName={uploadTarget.name}
+        roleLabel={uploadTarget.roleLabel}
+        currentSignatureUrl={uploadTarget.currentSig}
+        onSuccess={(newSigUrl) => {
+          if (uploadTarget.type === "DOCTOR") {
+            setDoctorsList((prev) =>
+              prev.map((d) => (d.id === uploadTarget.staffId ? { ...d, signatureUrl: newSigUrl } : d))
+            )
+          } else {
+            setSignatoriesList((prev) =>
+              prev.map((s) => (s.id === uploadTarget.staffId ? { ...s, signatureUrl: newSigUrl, hasSignature: Boolean(newSigUrl) } : s))
+            )
+          }
+        }}
+      />
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-3">

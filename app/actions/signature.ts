@@ -36,10 +36,13 @@ export async function uploadSignature(formData: FormData): Promise<SignatureActi
     return { success: false, message: "No file was selected for upload." }
   }
 
-  // Authorization: users can upload their own signature; admins can upload for any staff
+  // Authorization: users can upload their own signature; admins & doctors can upload for any staff
   const isSelf = (!staffId && !targetUserId) || targetUserId === session.user.id
   if (!isSelf) {
-    const isSuperAdmin = session.user.role === "SUPER_ADMIN" || session.user.role === "ADMIN"
+    const isSuperAdmin =
+      session.user.role === "SUPER_ADMIN" ||
+      session.user.role === "ADMIN" ||
+      session.user.role === "DOCTOR"
     if (!isSuperAdmin) {
       // Check if this staffId belongs to this user
       if (staffId) {
@@ -48,7 +51,7 @@ export async function uploadSignature(formData: FormData): Promise<SignatureActi
           select: { userId: true },
         })
         if (staffRec?.userId !== session.user.id) {
-          return { success: false, message: "Unauthorized. Admin privileges required to manage other staff signatures." }
+          return { success: false, message: "Unauthorized. Admin or Doctor privileges required to manage staff signatures." }
         }
       } else {
         return { success: false, message: "Unauthorized to update this user's signature." }
@@ -164,6 +167,8 @@ export async function uploadSignature(formData: FormData): Promise<SignatureActi
     revalidatePath("/dashboard/profile")
     revalidatePath("/dashboard/hr/staff")
     revalidatePath("/dashboard/admin/users")
+    revalidatePath("/dashboard/ipd/print/summary", "layout")
+    revalidatePath("/dashboard/ipd/patient", "layout")
 
     return {
       success: true,
@@ -289,6 +294,8 @@ export async function removeSignature(params: {
     revalidatePath("/dashboard/profile")
     revalidatePath("/dashboard/hr/staff")
     revalidatePath("/dashboard/admin/users")
+    revalidatePath("/dashboard/ipd/print/summary", "layout")
+    revalidatePath("/dashboard/ipd/patient", "layout")
 
     return {
       success: true,

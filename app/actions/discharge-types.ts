@@ -22,10 +22,12 @@ const DEFAULT_DISCHARGE_TYPES = [
     showBilling: true,
     autoReleaseBed: true,
     templateSections: [
-      { sectionKey: "finalDiagnosis", sectionLabel: "Final Diagnosis", placeholder: "e.g., Pneumonia with pleural effusion, resolved", required: true },
-      { sectionKey: "courseInHospital", sectionLabel: "Course in Hospital", placeholder: "Treatment given during stay, investigations performed...", required: true },
-      { sectionKey: "conditionAtDischarge", sectionLabel: "Condition at Discharge", placeholder: "Patient condition, vitals stable...", required: true },
-      { sectionKey: "adviceOnDischarge", sectionLabel: "Advice on Discharge", placeholder: "Medications, diet, activity restrictions...", required: true },
+      { sectionKey: "finalDiagnosis", sectionLabel: "DISEASE / FINAL DIAGNOSIS", placeholder: "e.g., Pneumonia with pleural effusion, resolved", required: true },
+      { sectionKey: "treatmentGiven", sectionLabel: "TREATMENT GIVEN", placeholder: "Treatment given during stay, investigations performed...", required: true },
+      { sectionKey: "treatmentOnDischarge", sectionLabel: "TREATMENT ON DISCHARGE", placeholder: "Take-home treatment, medications prescribed...", required: false },
+      { sectionKey: "adviceOnDischarge", sectionLabel: "ADVICE ON DISCHARGE", placeholder: "Diet, rest, follow-up instructions...", required: true },
+      { sectionKey: "conditionAtDischarge", sectionLabel: "CONDITION AT DISCHARGE", placeholder: "Patient condition, vitals stable...", required: false },
+      { sectionKey: "courseInHospital", sectionLabel: "COURSE IN HOSPITAL", placeholder: "Clinical course during admission...", required: false },
     ],
   },
   {

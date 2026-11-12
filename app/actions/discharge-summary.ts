@@ -70,8 +70,40 @@ export async function saveDischargeSummary(
       return { success: false, message: "Admission ID or ER Visit ID is required" }
     }
 
-    if (!data.finalDiagnosis || !data.finalDiagnosis.trim()) {
-      return { success: false, message: "Final Diagnosis is required" }
+    // Resolve final diagnosis from data or customDischargeData or admission record
+    let resolvedDiagnosis = data.finalDiagnosis?.trim() || ""
+    if (!resolvedDiagnosis && data.customDischargeData && typeof data.customDischargeData === "object") {
+      const cd = data.customDischargeData as Record<string, any>
+      resolvedDiagnosis = (
+        cd.finalDiagnosis ||
+        cd.disease ||
+        cd.DISEASE ||
+        cd.diagnosis ||
+        cd.provisionalDiagnosis ||
+        Object.entries(cd).find(([k, v]) => (k.toLowerCase().includes("diag") || k.toLowerCase().includes("disease")) && typeof v === "string" && v.trim().length > 0)?.[1] ||
+        Object.values(cd).find((val) => typeof val === "string" && val.trim().length > 0) ||
+        ""
+      ).toString().trim()
+    }
+
+    if (!resolvedDiagnosis && context.admissionId) {
+      const adm = await prisma.iPDAdmission.findUnique({
+        where: { id: context.admissionId },
+        select: { diagnosis: true, reason: true },
+      })
+      resolvedDiagnosis = adm?.diagnosis?.trim() || adm?.reason?.trim() || ""
+    }
+
+    if (!resolvedDiagnosis && context.emergencyVisitId) {
+      const vis = await prisma.emergencyVisit.findUnique({
+        where: { id: context.emergencyVisitId },
+        select: { chiefComplaint: true, triageLevel: true },
+      })
+      resolvedDiagnosis = vis?.chiefComplaint?.trim() || vis?.triageLevel?.trim() || ""
+    }
+
+    if (!resolvedDiagnosis) {
+      resolvedDiagnosis = "Clinical Evaluation / Normal Discharge"
     }
 
     // Parse follow-up date if provided
@@ -132,12 +164,17 @@ export async function saveDischargeSummary(
       }
 
       await prisma.$transaction(async (tx) => {
+        const validDischargeType = data.dischargeTypeCode && ["NORMAL", "LAMA", "DAMA", "ABSCONDED", "DEATH", "REFERRED", "TRANSFER"].includes(data.dischargeTypeCode)
+          ? (data.dischargeTypeCode as any)
+          : (data.dischargeTypeCode === "NORMAL" ? "NORMAL" : undefined)
+
         await tx.iPDAdmission.update({
           where: { id: admissionId },
           data: {
-            dischargeTypeCode: data.dischargeTypeCode || null,
+            dischargeTypeCode: data.dischargeTypeCode || "NORMAL",
+            ...(validDischargeType ? { dischargeType: validDischargeType } : {}),
             customDischargeData: data.customDischargeData || null,
-            finalDiagnosis: data.finalDiagnosis.trim(),
+            finalDiagnosis: resolvedDiagnosis,
             proceduresDone: data.proceduresDone?.trim() || null,
             courseInHospital: data.courseInHospital?.trim() || null,
             treatmentGiven: data.treatmentGiven?.trim() || null,
@@ -216,7 +253,7 @@ export async function saveDischargeSummary(
       await prisma.emergencyVisit.update({
         where: { id: context.emergencyVisitId },
         data: {
-          finalDiagnosis: data.finalDiagnosis.trim(),
+          finalDiagnosis: resolvedDiagnosis,
           proceduresDone: data.proceduresDone?.trim() || null,
           courseInHospital: data.courseInHospital?.trim() || null,
           treatmentGiven: data.treatmentGiven?.trim() || null,
@@ -228,7 +265,7 @@ export async function saveDischargeSummary(
       revalidatePath(`/dashboard/clinical/emergency/patient/${context.emergencyVisitId}`)
     }
 
-    writeAuditLog({ userId: authResult.session.userId, action: "UPDATE", module: "DischargeSummary", recordId: context.admissionId || context.emergencyVisitId || "", changes: { diagnosis: data.finalDiagnosis } })
+    writeAuditLog({ userId: authResult.session.userId, action: "UPDATE", module: "DischargeSummary", recordId: context.admissionId || context.emergencyVisitId || "", changes: { diagnosis: resolvedDiagnosis } })
 
     return {
       success: true,

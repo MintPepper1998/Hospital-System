@@ -246,7 +246,29 @@ export default async function PrintSummaryPage({ params }: PrintSummaryPageProps
           <>
             {selectedType.templateSections.map((section: any) => {
               const customData = (d as any).customDischargeData as any;
-              const val = customData?.[section.sectionKey] || (d as any)[section.sectionKey];
+              const k = section.sectionKey;
+              const trimmedKey = typeof k === "string" ? k.trim() : "";
+              const lowerKey = trimmedKey.toLowerCase();
+              let val = customData?.[k] || (trimmedKey ? customData?.[trimmedKey] : null) || (d as any)[k] || (d as any)[trimmedKey];
+
+              if (!val) {
+                if (lowerKey.includes("diag") || lowerKey.includes("disease")) {
+                  val = customData?.disease || customData?.finalDiagnosis || d.finalDiagnosis || d.diagnosis;
+                } else if (lowerKey.includes("treat") && lowerKey.includes("given")) {
+                  val = customData?.treatmentGiven || customData?.["treatement given "] || d.treatmentGiven;
+                } else if (lowerKey.includes("treat") && lowerKey.includes("discharge")) {
+                  val = customData?.treatmentOnDischarge || customData?.["treatement on discharge "] || customData?.adviceOnDischarge || d.adviceOnDischarge;
+                } else if (lowerKey.includes("advice")) {
+                  val = customData?.adviceOnDischarge || d.adviceOnDischarge;
+                } else if (lowerKey.includes("condition")) {
+                  val = customData?.conditionAtDischarge || d.conditionAtDischarge;
+                } else if (lowerKey.includes("course")) {
+                  val = customData?.courseInHospital || d.courseInHospital;
+                } else if (lowerKey.includes("proc")) {
+                  val = customData?.proceduresDone || d.proceduresDone;
+                }
+              }
+
               if (!val) return null;
               return (
                 <div key={section.sectionKey}>

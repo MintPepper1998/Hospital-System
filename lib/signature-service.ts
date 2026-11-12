@@ -83,16 +83,46 @@ export async function saveSignatureToStorage(options: {
   const safeId = identifier.replace(/[^a-zA-Z0-9_-]/g, "_")
   const fileName = `sig-${safeId}-${Date.now()}.png`
 
-  // Ensure public/uploads/signatures exists
-  const uploadsDir = path.join(process.cwd(), "public", "uploads", "signatures")
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true })
+  let fileUrl = `/uploads/signatures/${fileName}`
+
+  // Safe local disk storage (works in local dev / non-serverless; caught gracefully on read-only serverless/Amplify)
+  try {
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "signatures")
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true })
+    }
+
+    const filePath = path.join(uploadsDir, fileName)
+    await fs.promises.writeFile(filePath, buffer)
+  } catch (diskErr) {
+    console.warn("[WARN] Could not write signature to local disk (expected on read-only serverless/Amplify):", diskErr)
   }
 
-  const filePath = path.join(uploadsDir, fileName)
-  await fs.promises.writeFile(filePath, buffer)
-
-  const fileUrl = `/uploads/signatures/${fileName}`
+  // Safe S3 storage if AWS S3 bucket is configured
+  const bucket = process.env.S3_BUCKET_NAME || process.env.AWS_BUCKET_NAME
+  if (bucket) {
+    try {
+      const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3")
+      const region = process.env.S3_REGION || process.env.AWS_REGION || "ap-south-1"
+      const accessKeyId = process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || ""
+      const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || ""
+      if (accessKeyId && secretAccessKey) {
+        const s3 = new S3Client({ region, credentials: { accessKeyId, secretAccessKey } })
+        const s3Key = `signatures/${fileName}`
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: s3Key,
+            Body: buffer,
+            ContentType: "image/png",
+          })
+        )
+        fileUrl = `https://${bucket}.s3.${region}.amazonaws.com/${s3Key}`
+      }
+    } catch (s3Err) {
+      console.warn("[WARN] Could not upload signature to S3:", s3Err)
+    }
+  }
 
   return {
     fileUrl,
